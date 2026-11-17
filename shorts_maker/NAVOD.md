@@ -81,7 +81,7 @@ Přepis se ukládá, takže když stejné video zpracuješ znovu (např. s jiný
 
 **a) Zdarma (bez AI):** program dá každému úseku body podle
 * hlasitosti oproti okolí (výkřiky, smích, výbuchy),
-* emotivních slov a hlášek („ty vole“, „to snad ne“, „haha“, „mám ho“…; seznam `KLICOVA_SLOVA` si můžeš upravit na začátku souboru),
+* emotivních slov a hlášek („ty vole“, „to snad ne“, „haha“, „mám ho“…; seznamy `KLICOVA_SLOVA_CS` a `KLICOVA_SLOVA_EN` si můžeš upravit na začátku souboru),
 * tempa řeči (ticho dostává mínusové body) a silného začátku.
 
 Názvy klipů se berou přímo z přepisu, takže jsou jednodušší.
