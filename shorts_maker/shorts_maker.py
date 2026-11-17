@@ -10,13 +10,18 @@ Postup programu:
   1. Získá video (stáhne z YouTube přes yt-dlp, nebo použije tvůj soubor).
   2. Vytáhne z videa zvuk (ffmpeg).
   3. Přepíše řeč na text s časy jednotlivých slov (faster-whisper, lokálně, zdarma).
+     Umí češtinu, angličtinu i mix (ty mluvíš česky, postavy ve hře anglicky).
   4. Změří hlasitost zvuku v čase (výkřiky, smích, akce = hlasitá místa).
   5. Vybere nejlepší momenty:
        a) ZDARMA – vlastní bodování (hlasitost + emotivní slova + tempo řeči),
        b) CLAUDE AI – pošle přepis Claudovi, který vybere nejlepší pasáže
-          a rovnou napíše názvy a popisy.
-  6. Každý klip vystřihne, převede na 9:16 a vypálí do něj titulky.
-  7. Uloží hotová MP4 + soubor popisky.txt s návrhy názvů a popisů.
+          a rovnou napíše názvy, popisy a úderný nadpis.
+  6. Ukáže ti návrhy ke kontrole (můžeš je odškrtnout, upravit čas, nadpis, název
+     a podívat se na náhled).
+  7. Každý vybraný klip vystřihne, převede na 9:16 (střed / rozmazané pozadí /
+     kamera nahoře + hra dole), přidá přiblížení v akčních momentech, velký
+     nadpis na začátek a titulky ve stylu TikToku.
+  8. Uloží hotová MP4 + soubor popisky.txt s návrhy názvů a popisů.
 
 Spuštění:  python shorts_maker.py   (otevře se okno v prohlížeči)
 """
@@ -59,8 +64,6 @@ VYSTUP_DIR = PROGRAM_DIR / "vystup"          # sem se ukládají hotové klipy
 PRACOVNI_DIR = PROGRAM_DIR / "pracovni"      # stažená videa, zvuk, přepisy (mezipaměť)
 SOUBOR_S_KLICEM = PROGRAM_DIR / "api_klic.txt"
 
-JAZYK = "cs"                     # jazyk řeči pro přepis ("cs" = čeština)
-
 # Vzhled titulků (barvy jsou ve formátu ASS: &H00BBGGRR&, tedy MODRÁ-ZELENÁ-ČERVENÁ)
 TITULKY_FONT = "Arial Black"     # tučné písmo, ve Windows je vždy k dispozici
 TITULKY_VELIKOST = 92            # velikost písma (ve videu 1080x1920)
@@ -70,9 +73,22 @@ TITULKY_OD_SPODU = 520           # vzdálenost titulků od spodního okraje (px)
                                  # TikTok/Shorts mají dole tlačítka, proto ne úplně dole
 BARVA_TEXTU = "&H00FFFFFF&"      # bílá
 BARVA_ZVYRAZNENI = "&H0000FFFF&"  # žlutá – aktuálně vyslovované slovo
+BARVA_DIALOGU = "&H00E6D8AD&"    # světle modrá – titulky anglických dialogů postav ve hře
 SLOV_NA_RADEK_MIN = 2
 SLOV_NA_RADEK_MAX = 4
 ZNAKU_NA_RADEK_MAX = 22          # delší skupiny slov se rozdělí
+
+# Velký nadpis na začátku klipu ("háček", aby divák neodscrolloval)
+NADPIS_VELIKOST = 96
+NADPIS_DELKA = 3.2               # kolik sekund je nadpis vidět
+NADPIS_BARVA = "&H00FFFFFF&"     # bílá
+NADPIS_POZADI = "&H26000000&"    # tmavý podklad pod nadpisem (první dvojčíslí = průhlednost)
+NADPIS_MAX_ZNAKU = 40
+
+# Přiblížení (zoom) v akčních momentech
+PRIBLIZENI_SILA = 0.18           # 0.18 = přiblížit o 18 %
+PRIBLIZENI_PRAH = 2.2            # jak moc hlasitý musí moment být (vyšší = méně často)
+PRIBLIZENI_MAX = 2               # max. počet přiblížení v jednom klipu
 
 # Kódování videa
 X264_PRESET = "veryfast"         # rychlost kódování procesorem (ultrafast … slow)
@@ -80,6 +96,9 @@ X264_KVALITA = 21                # CRF: menší číslo = lepší kvalita a vět
 
 # Minimální mezera mezi dvěma vybranými klipy (sekundy), aby se neopakovaly.
 MEZERA_MEZI_KLIPY = 15
+
+# Kolik návrhů navíc ukázat ke kontrole (nad zvolený počet klipů).
+NAVRHU_NAVIC = 4
 
 # Modely Claude, ze kterých se dá vybrat v okně: (popisek, id modelu, cena vstup $/1M, cena výstup $/1M)
 CLAUDE_MODELY = [
@@ -92,12 +111,12 @@ KURZ_USD_CZK = 23.0              # jen pro orientační přepočet ceny do korun
 # Slova a fráze, které obvykle znamenají zajímavý/vtipný/emotivní moment.
 # Číslo = váha (čím vyšší, tím víc to zvedne skóre). Klidně si doplň vlastní
 # hlášky, které na streamu často říkáš. Píše se BEZ diakritiky a malými písmeny.
-KLICOVA_SLOVA = {
+KLICOVA_SLOVA_CS = {
     # překvapení / šok
-    "ty vole": 1.0, "no ty vole": 2.0, "do prdele": 2.0, "kurva": 1.5, "pi*a": 1.5,
-    "paneboze": 2.0, "pane boze": 2.0, "proboha": 1.5, "boze": 1.0, "cože": 1.5,
-    "coze": 1.5, "to snad ne": 2.5, "to neni mozny": 2.5, "to neni mozne": 2.5,
-    "no ne": 1.5, "nevěřím": 2.0, "neverim": 2.0, "co to bylo": 2.5, "co se stalo": 1.5,
+    "ty vole": 1.0, "no ty vole": 2.0, "do prdele": 2.0, "kurva": 1.5,
+    "paneboze": 2.0, "pane boze": 2.0, "proboha": 1.5, "boze": 1.0, "coze": 1.5,
+    "to snad ne": 2.5, "to neni mozny": 2.5, "to neni mozne": 2.5,
+    "no ne": 1.5, "neverim": 2.0, "co to bylo": 2.5, "co se stalo": 1.5,
     "vazne": 1.0, "fakt jo": 1.0, "wow": 2.0, "sakra": 1.5, "kruci": 1.0, "do haje": 1.5,
     "jejda": 1.0, "ach jo": 1.0, "hruza": 1.5, "des": 1.0,
     # nadšení / výhra
@@ -110,10 +129,38 @@ KLICOVA_SLOVA = {
     "umrel jsem": 2.0, "umrel": 1.5, "chcipl": 2.0, "zabil me": 2.0, "zabili me": 2.0,
     "nejhorsi": 1.5, "to je bug": 2.0, "co to je": 1.5, "proc": 0.5, "nenavidim": 2.0,
     "pomoc": 1.5, "utikej": 2.0, "rychle": 1.0, "delej": 1.0, "pozor": 1.0,
+    # GTA
+    "policajti": 1.5, "fizlove": 1.5, "honicka": 2.0, "utekl jsem": 2.0, "wasted": 2.5,
+    "busted": 2.5, "bouracka": 2.0, "vybuch": 2.0, "nabural": 1.5, "hvezdy": 1.0,
     # smích
     "haha": 2.5, "hahaha": 3.0, "hehe": 1.5, "smich": 2.0, "to je vtipny": 2.0,
     "to je vtipne": 2.0, "jsem se posral": 2.5, "nemuzu": 1.0,
 }
+KLICOVA_SLOVA_EN = {
+    "oh my god": 2.5, "omg": 2.0, "what the": 2.0, "wtf": 2.0, "no way": 2.5,
+    "lets go": 2.5, "let s go": 2.5, "holy": 2.0, "shit": 1.5, "fuck": 1.5, "damn": 1.5,
+    "bro": 1.0, "dude": 1.0, "wow": 2.0, "insane": 2.5, "crazy": 2.0, "i m dead": 2.0,
+    "wasted": 2.5, "busted": 2.5, "run": 1.0, "help": 1.5, "haha": 2.5, "hahaha": 3.0,
+    "lol": 2.0, "yes": 2.0, "clutch": 2.5, "headshot": 2.0, "are you kidding": 2.5,
+    "what just happened": 3.0, "nice": 1.0, "gg": 1.5, "cops": 1.5, "police": 1.5,
+    "get out": 1.5, "watch out": 1.5, "oh no": 2.0, "no no no": 2.5, "unbelievable": 2.5,
+}
+
+# Jazyky v okně: popisek -> kód
+JAZYKY_RECI = {
+    "Čeština": "cs",
+    "Angličtina": "en",
+    "Čeština + angličtina (mluvím česky, postavy ve hře anglicky)": "mix",
+}
+JAZYKY_TEXTU = {"Čeština": "cs", "English": "en"}
+
+# Rozložení svislého videa
+ROZLOZENI = {
+    "Oříznout na střed": "stred",
+    "Rozostřené pozadí (celý obraz hry)": "rozmazane",
+    "Kamera nahoře + hra dole (facecam)": "kamera",
+}
+POZICE_KAMERY = ["Vpravo nahoře", "Vlevo nahoře", "Vpravo dole", "Vlevo dole"]
 
 
 # =============================================================================
@@ -133,12 +180,41 @@ def nazev_souboru(text, max_delka=50):
     return (t[:max_delka].rstrip("-")) or "klip"
 
 
+def bez_emoji(text):
+    """Odstraní emoji (do videa se vypálit nedají – zobrazily by se jako čtverečky)."""
+    t = "".join(c for c in text if unicodedata.category(c) not in ("So", "Cs", "Co", "Cn")
+                and c not in "\u200d\ufe0f")
+    return re.sub(r"\s+", " ", t).strip()
+
+
 def cas_text(sekundy):
     """123.4 -> '2:03', 3725 -> '1:02:05'"""
     s = int(round(sekundy))
     h, s = divmod(s, 3600)
     m, s = divmod(s, 60)
     return f"{h}:{m:02d}:{s:02d}" if h else f"{m}:{s:02d}"
+
+
+def cas_presny(sekundy):
+    """123.45 -> '2:03.5' (s desetinou sekundy – pro úpravy v tabulce)"""
+    d = int(round(sekundy * 10))
+    h, d = divmod(d, 36000)
+    m, d = divmod(d, 600)
+    s, d = divmod(d, 10)
+    return f"{h}:{m:02d}:{s:02d}.{d}" if h else f"{m}:{s:02d}.{d}"
+
+
+def precti_cas(text):
+    """'2:03.5' / '1:02:03' / '123.5' -> sekundy"""
+    casti = str(text).strip().replace(",", ".").split(":")
+    try:
+        hodnoty = [float(c) for c in casti]
+    except ValueError:
+        raise ValueError(f"Nerozumím času „{text}“ (piš např. 2:03.5)")
+    sekundy = 0.0
+    for h in hodnoty:
+        sekundy = sekundy * 60 + h
+    return sekundy
 
 
 def cas_ass(sekundy):
@@ -155,9 +231,8 @@ def najdi_ffmpeg():
     cesta = shutil.which("ffmpeg")
     if not cesta:
         raise RuntimeError(
-            "Nenašel jsem program ffmpeg. Nainstaluj ho příkazem\n"
-            "   winget install --id Gyan.FFmpeg -e\n"
-            "a pak ZAVŘI a znovu otevři okno příkazového řádku i tento program."
+            "Nenašel jsem program ffmpeg. Zavři program, restartuj počítač "
+            "a spusť START.bat znovu (ffmpeg doinstaluje)."
         )
     return cesta
 
@@ -170,19 +245,35 @@ def spust_prikaz(prikaz, cwd=None):
     )
     if vysledek.returncode != 0:
         konec = "\n".join(vysledek.stderr.strip().splitlines()[-15:])
-        raise RuntimeError(f"Příkaz selhal ({prikaz[0]}):\n{konec}")
+        raise RuntimeError(f"Příkaz selhal ({Path(prikaz[0]).name}):\n{konec}")
     return vysledek
 
 
-def delka_videa(cesta):
-    """Zjistí délku videa v sekundách pomocí ffprobe."""
+def info_o_videu(cesta):
+    """Zjistí délku videa (s) a počet snímků za sekundu."""
     ffprobe = shutil.which("ffprobe") or "ffprobe"
-    r = spust_prikaz([ffprobe, "-v", "error", "-show_entries", "format=duration",
-                      "-of", "default=noprint_wrappers=1:nokey=1", str(cesta)])
+    r = spust_prikaz([ffprobe, "-v", "error", "-select_streams", "v:0",
+                      "-show_entries", "stream=r_frame_rate:format=duration",
+                      "-of", "json", str(cesta)])
+    data = json.loads(r.stdout or "{}")
     try:
-        return float(r.stdout.strip())
-    except ValueError:
-        return 0.0
+        delka = float(data.get("format", {}).get("duration", 0))
+    except (TypeError, ValueError):
+        delka = 0.0
+    fps = "30"
+    try:
+        fps_text = data["streams"][0]["r_frame_rate"]
+        a, b = fps_text.split("/")
+        if float(a) > 0 and float(b) > 0 and float(a) / float(b) <= 120:
+            fps = fps_text
+    except Exception:
+        pass
+    return delka, fps
+
+
+def fps_cislo(fps):
+    a, _, b = str(fps).partition("/")
+    return float(a) / float(b or 1)
 
 
 # =============================================================================
@@ -238,6 +329,18 @@ def stahni_z_youtube(url, log):
         raise RuntimeError("Stažení se nepovedlo – soubor nebyl nalezen.")
     log(f"✅ Staženo: {info.get('title', cesta.name)}")
     return cesta, info.get("title") or cesta.stem
+
+
+def priprav_video(vstup, log):
+    """Vstup = odkaz na YouTube nebo cesta k souboru. Vrací (cesta, název)."""
+    vstup = str(vstup).strip().strip('"')
+    if je_odkaz(vstup):
+        return stahni_z_youtube(vstup, log)
+    cesta = Path(vstup)
+    if cesta.exists():
+        log(f"📁 Používám soubor: {cesta.name}")
+        return cesta, cesta.stem
+    raise RuntimeError(f"Soubor neexistuje: {vstup}")
 
 
 # =============================================================================
@@ -310,7 +413,7 @@ def spocitej_vzruseni(wav, slozka, log):
 
 
 def vzruseni_v_useku(vzruseni, od, do):
-    a = int(od / KROK_HLASITOSTI)
+    a = max(0, int(od / KROK_HLASITOSTI))
     b = max(a + 1, int(do / KROK_HLASITOSTI))
     return vzruseni[a:b]
 
@@ -319,10 +422,32 @@ def vzruseni_v_useku(vzruseni, od, do):
 #  KROK 3: PŘEPIS ŘEČI (faster-whisper)
 # =============================================================================
 
-def prepis_rec(wav, slozka, model_nazev, log):
-    """Přepíše řeč na text. Vrací seznam slov: [{"s": začátek, "e": konec, "w": "slovo"}, …].
+SLOVA_CS = {"je", "a", "se", "na", "že", "ze", "ty", "jsem", "co", "tak", "ne", "jo", "vole", "už",
+            "uz", "jak", "tam", "tady", "mi", "mě", "me", "no", "ale", "by", "si", "asi", "teď",
+            "ted", "proč", "proc", "kde", "není", "neni", "jsi", "bude", "máme", "dobře", "jako",
+            "sem", "fakt", "toho", "tom", "ten", "ta", "ještě", "jeste", "já", "ja", "mám", "mam"}
+SLOVA_EN = {"the", "you", "and", "is", "what", "i", "of", "it", "that", "this", "we", "my", "your",
+            "don't", "i'm", "it's", "are", "was", "with", "for", "get", "got", "they", "be",
+            "have", "just", "know", "right", "man", "come", "go", "here", "there", "now", "yeah",
+            "okay", "oh", "hey", "what's", "gonna", "you're", "let's", "can", "do", "not", "all"}
+
+
+def je_anglicky(text):
+    """Jednoduchý odhad, jestli je věta anglicky (podle běžných slov a diakritiky)."""
+    t = text.lower()
+    slova = re.findall(r"[a-záčďéěíňóřšťúůýž']+", t)
+    if not slova:
+        return False
+    cs = sum(1 for s in slova if s in SLOVA_CS) + 2 * len(re.findall(r"[áčďéěíňóřšťúůýž]", t))
+    en = sum(1 for s in slova if s in SLOVA_EN)
+    return en > cs
+
+
+def prepis_rec(wav, slozka, model_nazev, jazyk, log):
+    """Přepíše řeč na text. Vrací seznam slov:
+    [{"s": začátek, "e": konec, "w": "slovo", "l": "cs"/"en"}, …].
     Výsledek se uloží, takže při dalším spuštění se stejným videem je hotový hned."""
-    soubor = slozka / f"prepis_{model_nazev}.json"
+    soubor = slozka / f"prepis_{model_nazev}_{jazyk}.json"
     if soubor.exists():
         data = json.loads(soubor.read_text(encoding="utf-8"))
         log(f"✅ Přepis už existuje z minula ({len(data['slova'])} slov).")
@@ -337,12 +462,16 @@ def prepis_rec(wav, slozka, model_nazev, log):
                          cpu_threads=os.cpu_count() or 4)
 
     nastaveni = dict(
-        language=JAZYK,
         word_timestamps=True,              # časy jednotlivých slov (kvůli titulkům)
         vad_filter=True,                   # přeskočí ticho a samotnou hudbu ze hry
         beam_size=1,                       # rychlejší varianta (na CPU se to vyplatí)
         condition_on_previous_text=False,  # u dlouhých streamů brání "zacyklení" přepisu
     )
+    if jazyk == "mix":
+        nastaveni.update(language=None, multilingual=True)   # jazyk se pozná u každé věty zvlášť
+    else:
+        nastaveni.update(language=jazyk)
+
     log("📝 Přepisuji řeč na text… (na procesoru to u 3h streamu trvá zhruba 30–90 minut "
         "podle zvoleného modelu – nech okno otevřené)")
     start = time.time()
@@ -357,10 +486,11 @@ def prepis_rec(wav, slozka, model_nazev, log):
     slova = []
     posledni_hlaseni = 0
     for seg in segmenty:
+        lang = "en" if (jazyk == "en" or (jazyk == "mix" and je_anglicky(seg.text))) else "cs"
         for w in seg.words or []:
             text = w.word.strip()
             if text:
-                slova.append({"s": round(w.start, 2), "e": round(w.end, 2), "w": text})
+                slova.append({"s": round(w.start, 2), "e": round(w.end, 2), "w": text, "l": lang})
         if time.time() - posledni_hlaseni > 3:
             posledni_hlaseni = time.time()
             p = min(100, seg.end * 100 / celkem)
@@ -375,14 +505,16 @@ def prepis_rec(wav, slozka, model_nazev, log):
     # Pro zajímavost uloží i čitelný přepis
     vety = vytvor_vety(slova)
     (slozka / "prepis_citelny.txt").write_text(
-        "\n".join(f"[{cas_text(v['s'])}] {v['text']}" for v in vety), encoding="utf-8")
+        "\n".join(f"[{cas_text(v['s'])}]{' (EN)' if v['l'] == 'en' else ''} {v['text']}" for v in vety),
+        encoding="utf-8")
     log(f"✅ Přepis hotový za {cas_text(time.time() - start)} ({len(slova)} slov).")
     return slova
 
 
 def vytvor_vety(slova):
-    """Seskupí slova do vět/promluv. Věta končí interpunkcí (. ! ?), delší pauzou
-    nebo po 12 sekundách. Díky tomu klipy nezačínají ani nekončí uprostřed věty."""
+    """Seskupí slova do vět/promluv. Věta končí interpunkcí (. ! ?), delší pauzou,
+    změnou jazyka nebo po 12 sekundách. Díky tomu klipy nezačínají ani nekončí
+    uprostřed věty."""
     vety, aktualni = [], []
 
     def uzavri():
@@ -390,12 +522,14 @@ def vytvor_vety(slova):
             vety.append({
                 "s": aktualni[0]["s"], "e": aktualni[-1]["e"],
                 "text": " ".join(w["w"] for w in aktualni),
+                "l": aktualni[0].get("l", "cs"),
                 "slova": list(aktualni),
             })
             aktualni.clear()
 
     for w in slova:
-        if aktualni and (w["s"] - aktualni[-1]["e"] > 0.8 or w["e"] - aktualni[0]["s"] > 12):
+        if aktualni and (w["s"] - aktualni[-1]["e"] > 0.8 or w["e"] - aktualni[0]["s"] > 12
+                         or w.get("l") != aktualni[-1].get("l")):
             uzavri()
         aktualni.append(w)
         if re.search(r"[.!?…]$", w["w"]):
@@ -408,12 +542,16 @@ def vytvor_vety(slova):
 #  KROK 4a: VÝBĚR MOMENTŮ ZDARMA (bez AI)
 # =============================================================================
 
-def skore_textu(text):
+def _pro_hledani(text):
+    return " " + re.sub(r"[^a-z0-9*? !]+", " ", bez_diakritiky(text)) + " "
+
+
+def skore_textu(text, klicova_slova):
     """Kolik "emocí" je v textu: klíčová slova, vykřičníky, otazníky, opakování."""
-    t = " " + re.sub(r"[^a-z0-9*? !]+", " ", bez_diakritiky(text)) + " "
+    t = _pro_hledani(text)
     skore = 0.0
-    for fraze, vaha in KLICOVA_SLOVA.items():
-        f = bez_diakritiky(fraze)
+    for fraze, vaha in klicova_slova.items():
+        f = _pro_hledani(fraze).strip()
         pocet = t.count(" " + f + " ") + t.count(" " + f + "!") + t.count(" " + f + "?")
         skore += vaha * min(pocet, 3)
     skore += 0.4 * min(text.count("!"), 5) + 0.2 * min(text.count("?"), 5)
@@ -424,6 +562,14 @@ def skore_textu(text):
             skore += 1.0
             break
     return skore
+
+
+def klicova_slova_pro(jazyk):
+    if jazyk == "cs":
+        return KLICOVA_SLOVA_CS
+    if jazyk == "en":
+        return KLICOVA_SLOVA_EN
+    return {**KLICOVA_SLOVA_EN, **KLICOVA_SLOVA_CS}
 
 
 def okraje_klipu(vety, i, j, delka_videa_s):
@@ -437,10 +583,18 @@ def okraje_klipu(vety, i, j, delka_videa_s):
     return max(0.0, start), min(konec, delka_videa_s)
 
 
-def vyber_zdarma(vety, vzruseni, delka_s, pocet, min_d, max_d, log):
+def zkrat(text, max_znaku):
+    text = text.strip()
+    if len(text) <= max_znaku:
+        return text
+    return text[:max_znaku].rsplit(" ", 1)[0].rstrip(",.;:") + "…"
+
+
+def vyber_zdarma(vety, vzruseni, delka_s, pocet, min_d, max_d, jazyk_reci, log):
     """Projde všechny možné úseky (od začátku jedné věty po konec jiné věty, délky
     min_d–max_d) a každému dá skóre. Pak vybere nejlepší, které se nepřekrývají."""
     log("🔎 Hledám nejlepší momenty (varianta zdarma)…")
+    klicova = klicova_slova_pro(jazyk_reci)
     kandidati = []
 
     if not vety:
@@ -454,7 +608,7 @@ def vyber_zdarma(vety, vzruseni, delka_s, pocet, min_d, max_d, log):
                 kandidati.append({"start": t, "konec": t + delka, "skore": s, "i": None, "j": None})
             t += 5
     else:
-        skore_vet = [skore_textu(v["text"]) for v in vety]
+        skore_vet = [skore_textu(v["text"], klicova) for v in vety]
         surova = []
         for i in range(len(vety)):
             for j in range(i, len(vety)):
@@ -504,22 +658,23 @@ def vyber_zdarma(vety, vzruseni, delka_s, pocet, min_d, max_d, log):
             if len(vybrane) >= pocet:
                 break
 
-    # Názvy a popisy (bez AI jednoduše z přepisu)
+    # Názvy, nadpisy a popisy (bez AI jednoduše z přepisu)
     for k in vybrane:
         if k["i"] is not None:
             useky = vety[k["i"]:k["j"] + 1]
-            nejlepsi = max(useky, key=lambda v: skore_textu(v["text"]) + 0.01 * len(v["text"]))
-            nazev = nejlepsi["text"].strip()
-            if len(nazev) > 60:
-                nazev = nazev[:60].rsplit(" ", 1)[0] + "…"
+            nejlepsi = max(useky, key=lambda v: skore_textu(v["text"], klicova) + 0.01 * len(v["text"]))
+            veta = nejlepsi["text"].strip()
+            nazev = zkrat(veta, 60)
             nazev = (nazev[:1].upper() + nazev[1:]) if nazev else "Moment ze streamu"
+            nadpis = zkrat(" ".join(veta.split()[:7]).rstrip(",.;:"), NADPIS_MAX_ZNAKU)
             prepis = " ".join(v["text"] for v in useky)
-            popis = (prepis[:180].rsplit(" ", 1)[0] + "…") if len(prepis) > 180 else prepis
+            popis = zkrat(prepis, 180)
         else:
             nazev = f"Akce v {cas_text(k['start'])}"
+            nadpis = ""
             popis = "Moment ze streamu."
-        k.update(nazev=nazev, popis=popis, hashtagy=[], duvod=f"skóre {k['skore']:.2f}")
-    log(f"✅ Vybráno {len(vybrane)} klipů.")
+        k.update(nazev=nazev, nadpis=nadpis, popis=popis, hashtagy=[], duvod=f"skóre {k['skore']:.2f}")
+    log(f"✅ Nalezeno {len(vybrane)} momentů.")
     return vybrane
 
 
@@ -527,9 +682,10 @@ def vyber_zdarma(vety, vzruseni, delka_s, pocet, min_d, max_d, log):
 #  KROK 4b: VÝBĚR MOMENTŮ POMOCÍ CLAUDE AI
 # =============================================================================
 
-SYSTEM_PROMPT = """Jsi zkušený střihač krátkých videí (YouTube Shorts, TikTok) pro český herní kanál.
-Dostaneš přepis dlouhého streamu z PS5 rozdělený na očíslované věty s časy a s úrovní hlasitosti
-(hl0 = ticho, hl9 = křik/smích/výbuch – hlasité místo bývá vtipná nebo vypjatá situace).
+SYSTEM_PROMPT = """Jsi zkušený střihač krátkých videí (YouTube Shorts, TikTok) pro herní kanál
+(PS5, např. GTA). Dostaneš přepis dlouhého streamu rozdělený na očíslované věty s časy,
+s úrovní hlasitosti (hl0 = ticho, hl9 = křik/smích/výbuch – hlasité místo bývá vtipná nebo
+vypjatá situace) a případně se značkou [EN] pro anglické dialogy postav ve hře.
 
 Tvůj úkol: vybrat úseky, které budou fungovat jako samostatné krátké video.
 Dobrý klip:
@@ -540,11 +696,13 @@ Dobrý klip:
 - neobsahuje dlouhá hluchá místa.
 Klipy se nesmí překrývat. Seřaď je od nejlepšího.
 
-Ke každému klipu napiš:
-- "nazev": chytlavý český název pro Shorts/TikTok (max. 70 znaků, může mít 1 emoji, nelži o obsahu),
-- "popis": 1–2 věty popisu v češtině,
+Ke každému klipu napiš (v jazyce, který určí zadání):
+- "nadpis": krátký úderný text, který bude velkým písmem v prvních 3 sekundách videa
+  (max. 35 znaků, BEZ emoji, láká k dokoukání, např. „TOHLE JSEM NEČEKAL“),
+- "nazev": chytlavý název pro Shorts/TikTok (max. 70 znaků, může mít 1 emoji, nelži o obsahu),
+- "popis": 1–2 věty popisu,
 - "hashtagy": 3–6 hashtagů (bez mezer, s #),
-- "duvod": krátce, proč je moment dobrý."""
+- "duvod": krátce česky, proč je moment dobrý."""
 
 
 def nacti_api_klic(zadany):
@@ -560,10 +718,12 @@ def nacti_api_klic(zadany):
     return os.environ.get("ANTHROPIC_API_KEY", "").strip()
 
 
-def vyber_claude(vety, vzruseni, delka_s, pocet, min_d, max_d, model_id, api_klic, nazev_hry, log):
+def vyber_claude(vety, vzruseni, delka_s, pocet, min_d, max_d, nast, log):
     """Pošle přepis Claudovi a nechá ho vybrat nejlepší momenty. Vrací seznam klipů."""
     import anthropic
 
+    model_id = nast["claude_model"]
+    api_klic = nacti_api_klic(nast["api_klic"])
     if not vety:
         raise RuntimeError("Ve videu nebyla rozpoznána žádná řeč – AI nemá z čeho vybírat.")
     if not api_klic:
@@ -574,13 +734,16 @@ def vyber_claude(vety, vzruseni, delka_s, pocet, min_d, max_d, model_id, api_kli
     for idx, v in enumerate(vety):
         h = vzruseni_v_useku(vzruseni, v["s"], v["e"])
         uroven = int(np.clip(round((float(h.max()) if len(h) else 0) * 1.5 + 2), 0, 9))
-        radky.append(f"{idx}|{cas_text(v['s'])}-{cas_text(v['e'])}|hl{uroven}|{v['text']}")
+        znacka = "[EN] " if (nast["jazyk_reci"] == "mix" and v["l"] == "en") else ""
+        radky.append(f"{idx}|{cas_text(v['s'])}-{cas_text(v['e'])}|hl{uroven}|{znacka}{v['text']}")
     prepis = "\n".join(radky)
 
+    jazyk_textu = "češtině" if nast["jazyk_textu"] == "cs" else "angličtině (English)"
     zadani = (
-        f"Hra: {nazev_hry or 'neuvedeno'}\n"
+        f"Hra: {nast['nazev_hry'] or 'neuvedeno'}\n"
+        f"Nadpis, název, popis a hashtagy piš v {jazyk_textu}.\n"
         f"Vyber přesně {pocet} klipů. Každý klip je souvislý úsek vět od \"prvni_veta\" do "
-        f"\"posledni_veta\" (čísla vět z přepisu) a musí být dlouhý {min_d}–{max_d} sekund.\n"
+        f"\"posledni_veta\" (čísla vět z přepisu) a musí být dlouhý {min_d:.0f}–{max_d:.0f} sekund.\n"
         f"Mezi klipy nech aspoň {MEZERA_MEZI_KLIPY} sekund odstup.\n\n"
         f"<prepis>\n{prepis}\n</prepis>"
     )
@@ -594,12 +757,14 @@ def vyber_claude(vety, vzruseni, delka_s, pocet, min_d, max_d, model_id, api_kli
                     "properties": {
                         "prvni_veta": {"type": "integer"},
                         "posledni_veta": {"type": "integer"},
+                        "nadpis": {"type": "string"},
                         "nazev": {"type": "string"},
                         "popis": {"type": "string"},
                         "hashtagy": {"type": "array", "items": {"type": "string"}},
                         "duvod": {"type": "string"},
                     },
-                    "required": ["prvni_veta", "posledni_veta", "nazev", "popis", "hashtagy", "duvod"],
+                    "required": ["prvni_veta", "posledni_veta", "nadpis", "nazev", "popis",
+                                 "hashtagy", "duvod"],
                     "additionalProperties": False,
                 },
             }
@@ -672,6 +837,7 @@ def vyber_claude(vety, vzruseni, delka_s, pocet, min_d, max_d, model_id, api_kli
         if konec - start > max_d:
             konec = start + max_d
         k = {"start": start, "konec": konec, "i": i, "j": j, "skore": 0.0,
+             "nadpis": bez_emoji(n["nadpis"])[:NADPIS_MAX_ZNAKU],
              "nazev": n["nazev"].strip(), "popis": n["popis"].strip(),
              "hashtagy": n["hashtagy"], "duvod": n["duvod"].strip()}
         if all(k["konec"] <= v["start"] or k["start"] >= v["konec"] for v in vybrane):
@@ -681,40 +847,50 @@ def vyber_claude(vety, vzruseni, delka_s, pocet, min_d, max_d, model_id, api_kli
 
     if len(vybrane) < pocet:
         log(f"   AI vrátila jen {len(vybrane)} použitelných klipů, doplním je variantou zdarma.")
-        for k in vyber_zdarma(vety, vzruseni, delka_s, pocet * 3, min_d, max_d, lambda *a, **b: None):
+        for k in vyber_zdarma(vety, vzruseni, delka_s, pocet * 3, min_d, max_d,
+                              nast["jazyk_reci"], lambda *a, **b: None):
             if all(k["konec"] <= v["start"] or k["start"] >= v["konec"] for v in vybrane):
                 vybrane.append(k)
             if len(vybrane) >= pocet:
                 break
-    log(f"✅ Claude vybral {len(vybrane)} klipů.")
+    log(f"✅ Claude vybral {len(vybrane)} momentů.")
     return vybrane
 
 
 # =============================================================================
-#  KROK 5: TITULKY VE STYLU TIKTOKU (formát ASS)
+#  KROK 5: TITULKY A NADPIS (formát ASS)
 # =============================================================================
 
 def ass_escape(text):
-    return text.replace("\\", "/").replace("{", "(").replace("}", ")")
+    return text.replace("\\", "/").replace("{", "(").replace("}", ")").replace("\n", " ")
 
 
-def vytvor_titulky(slova, start_klipu, konec_klipu, velka_pismena):
-    """Vytvoří obsah souboru .ass: po 2–4 slovech, aktuální slovo žluté a o kousek větší."""
+def vytvor_titulky(slova, start_klipu, konec_klipu, nast, nadpis=""):
+    """Vytvoří obsah souboru .ass:
+    - titulky po 2–4 slovech, aktuální slovo žluté a o kousek větší,
+    - (volitelně) velký nadpis v prvních sekundách klipu."""
+    velka_pismena = nast["velka_pismena"]
+    mix = nast["jazyk_reci"] == "mix"
     slova_klipu = []
     for w in slova:
         if w["s"] >= start_klipu - 0.05 and w["e"] <= konec_klipu + 0.3:
-            text = w["w"].strip().strip(",.;:…\"„“")   # čárky a tečky ve stylu TikToku nepíšeme
+            je_dialog = mix and w.get("l") == "en"
+            if je_dialog and not nast["titulky_dialogy"]:
+                continue                                  # anglické dialogy postav vynechat
+            text = w["w"].strip().strip(",.;:…\"„“")      # čárky a tečky ve stylu TikToku nepíšeme
             if not text:
                 continue
             if velka_pismena:
                 text = text.upper()
             slova_klipu.append({"s": w["s"] - start_klipu, "e": w["e"] - start_klipu,
-                                "w": ass_escape(text), "konec_vety": bool(re.search(r"[.!?…]$", w["w"]))})
+                                "w": ass_escape(text), "dialog": je_dialog,
+                                "konec_vety": bool(re.search(r"[.!?…]$", w["w"]))})
 
-    # 1a) rozdělení na úseky řeči – nový úsek začíná po konci věty nebo po pauze
+    # 1a) rozdělení na úseky řeči – nový úsek začíná po konci věty, po pauze nebo při změně jazyka
     useky, aktualni = [], []
     for w in slova_klipu:
-        if aktualni and (aktualni[-1]["konec_vety"] or w["s"] - aktualni[-1]["e"] > 0.6):
+        if aktualni and (aktualni[-1]["konec_vety"] or w["s"] - aktualni[-1]["e"] > 0.6
+                         or w["dialog"] != aktualni[-1]["dialog"]):
             useky.append(aktualni)
             aktualni = []
         aktualni.append(w)
@@ -749,6 +925,7 @@ def vytvor_titulky(slova, start_klipu, konec_klipu, velka_pismena):
     for g, skupina in enumerate(skupiny):
         dalsi_start = skupiny[g + 1][0]["s"] if g + 1 < len(skupiny) else delka
         konec_skupiny = min(skupina[-1]["e"] + 0.4, dalsi_start, delka)
+        zaklad = ("{\\c" + BARVA_DIALOGU + "}") if skupina[0]["dialog"] else ""
         for k, w in enumerate(skupina):
             od = skupina[0]["s"] if k == 0 else w["s"]
             do = skupina[k + 1]["s"] if k + 1 < len(skupina) else konec_skupiny
@@ -757,10 +934,21 @@ def vytvor_titulky(slova, start_klipu, konec_klipu, velka_pismena):
             casti = []
             for m, x in enumerate(skupina):
                 if m == k:
-                    casti.append("{\\c" + BARVA_ZVYRAZNENI + "\\fscx108\\fscy108}" + x["w"] + "{\\r}")
+                    casti.append("{\\c" + BARVA_ZVYRAZNENI + "\\fscx108\\fscy108}" + x["w"]
+                                 + "{\\r}" + zaklad)
                 else:
                     casti.append(x["w"])
-            udalosti.append(f"Dialogue: 0,{cas_ass(od)},{cas_ass(do)},TikTok,,0,0,0,,{' '.join(casti)}")
+            udalosti.append(f"Dialogue: 0,{cas_ass(od)},{cas_ass(do)},TikTok,,0,0,0,,{zaklad}{' '.join(casti)}")
+
+    # 3) velký nadpis na začátku (vyskočí, chvíli drží a zmizí)
+    nadpis = ass_escape(bez_emoji(nadpis or ""))
+    if nast["nadpis"] and nadpis:
+        efekt = "{\\fad(120,300)\\fscx70\\fscy70\\t(0,160,\\fscx112\\fscy112)\\t(160,300,\\fscx100\\fscy100)}"
+        udalosti.append(f"Dialogue: 1,{cas_ass(0)},{cas_ass(min(NADPIS_DELKA, delka))},Nadpis,,0,0,0,,"
+                        f"{efekt}{nadpis.upper()}")
+
+    # Nadpis se dává nahoru; u rozložení s kamerou na předěl kamera/hra
+    nadpis_od_shora = {"stred": 250, "rozmazane": 330, "kamera": 520}.get(nast["rozlozeni"], 250)
 
     hlavicka = f"""[Script Info]
 ScriptType: v4.00+
@@ -772,6 +960,7 @@ ScaledBorderAndShadow: yes
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
 Style: TikTok,{TITULKY_FONT},{TITULKY_VELIKOST},{BARVA_TEXTU},{BARVA_TEXTU},&H00000000&,&H80000000&,-1,0,0,0,100,100,0,0,1,{TITULKY_OBRYS},{TITULKY_STIN},2,70,70,{TITULKY_OD_SPODU},1
+Style: Nadpis,{TITULKY_FONT},{NADPIS_VELIKOST},{NADPIS_BARVA},{NADPIS_BARVA},{NADPIS_POZADI},&H00000000&,-1,0,0,0,100,100,0,0,3,22,0,8,90,90,{nadpis_od_shora},1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
@@ -780,39 +969,105 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 
 
 # =============================================================================
-#  KROK 6: STŘIH, PŘEVOD NA 9:16 A VYPÁLENÍ TITULKŮ (ffmpeg)
+#  KROK 6: STŘIH, PŘEVOD NA 9:16, PŘIBLÍŽENÍ A TITULKY (ffmpeg)
 # =============================================================================
+
+def momenty_priblizeni(vzruseni, start, konec):
+    """Najde nejhlasitější místa klipu (výbuch, výkřik), kde se obraz přiblíží.
+    Vrací seznam časů (od začátku klipu)."""
+    v = vzruseni_v_useku(vzruseni, start, konec)
+    if len(v) == 0:
+        return []
+    poradi = np.argsort(v)[::-1]
+    casy = []
+    for idx in poradi:
+        if v[idx] < PRIBLIZENI_PRAH or len(casy) >= PRIBLIZENI_MAX:
+            break
+        t = idx * KROK_HLASITOSTI
+        if t < 1.0 or t > (konec - start) - 2.5:
+            continue
+        if all(abs(t - c) > 8 for c in casy):
+            casy.append(t)
+    return sorted(casy)
+
+
+def filtr_priblizeni(casy, fps, sirka, vyska):
+    """ffmpeg filtr zoompan: v daných časech rychle přiblíží, chvíli drží, pak oddálí."""
+    if not casy:
+        return ""
+    T = f"(in/{fps_cislo(fps):.5f})"
+    casti = []
+    for t in casy:
+        a = max(0.0, t - 0.3)                 # začátek přiblížení (kousek před vrcholem)
+        b = a + 0.15 + 1.4 + 0.4              # konec oddálení
+        casti.append(f"min(1,max(0,min(({T}-{a:.2f})/0.15,({b:.2f}-{T})/0.4)))")
+    vyraz = casti[0]
+    for c in casti[1:]:
+        vyraz = f"max({vyraz},{c})"
+    return (f",zoompan=z='1+{PRIBLIZENI_SILA}*{vyraz}':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)'"
+            f":d=1:s={sirka}x{vyska}:fps={fps}")
+
+
+def vyrez_kamery(nast):
+    """Kde ve videu je kamera (facecam): vrací (x, y, šířka, výška) jako podíl obrazu."""
+    f = max(0.08, min(0.6, nast["kamera_velikost"] / 100.0))
+    pozice = nast["kamera_pozice"]
+    x = 1 - f if "Vpravo" in pozice else 0.0
+    y = 1 - f if "dole" in pozice else 0.0
+    return x, y, f, f
+
 
 AMD_NEFUNGUJE = False   # nastaví se, když kódování grafikou AMD selže
 
 
-def vyrenderuj_klip(video, start, konec, ass_obsah, cil, rozostrene_pozadi, pouzit_amd, log):
-    """Vystřihne úsek, převede ho na 1080x1920 a vypálí titulky."""
+def vyrenderuj_klip(video, k, slova, vzruseni, fps, nast, cil, log, nahled=False):
+    """Vystřihne úsek, převede ho na 1080x1920, přidá přiblížení, nadpis a titulky.
+    nahled=True vyrobí rychlý malý náhled (540x960) pro kontrolu."""
+    global AMD_NEFUNGUJE
+    start, konec = k["start"], k["konec"]
     delka = konec - start
-    pracovni = cil.parent / "_docasne"
-    pracovni.mkdir(exist_ok=True)
-    ass_soubor = pracovni / (cil.stem + ".ass")
-    ass_soubor.write_text(ass_obsah, encoding="utf-8")
+    pracovni = Path(cil).parent / "_docasne"
+    pracovni.mkdir(parents=True, exist_ok=True)
+    ass_soubor = pracovni / (Path(cil).stem + ".ass")
+    ass_soubor.write_text(vytvor_titulky(slova, start, konec, nast, k.get("nadpis", "")), encoding="utf-8")
 
-    if rozostrene_pozadi:
+    zoom_casy = momenty_priblizeni(vzruseni, start, konec) if nast["priblizeni"] else []
+    rozlozeni = nast["rozlozeni"]
+
+    if rozlozeni == "rozmazane":
         # Celé video uprostřed + jeho rozmazaná zvětšená kopie jako pozadí
         obraz = ("[0:v]split=2[pozadi][popredi];"
                  "[pozadi]scale=270:480:force_original_aspect_ratio=increase,crop=270:480,"
                  "boxblur=8:2,scale=1080:1920,eq=brightness=-0.1[pozadi2];"
                  "[popredi]scale=1080:-2:flags=lanczos[popredi2];"
-                 "[pozadi2][popredi2]overlay=(W-w)/2:(H-h)/2,setsar=1")
+                 "[pozadi2][popredi2]overlay=(W-w)/2:(H-h)/2,setsar=1"
+                 + filtr_priblizeni(zoom_casy, fps, 1080, 1920))
+    elif rozlozeni == "kamera":
+        # Nahoře kamera (1080x608), dole hra oříznutá na střed (1080x1312)
+        x, y, w, h = vyrez_kamery(nast)
+        obraz = ("[0:v]split=2[k][h];"
+                 f"[k]crop=iw*{w:.4f}:ih*{h:.4f}:iw*{x:.4f}:ih*{y:.4f},"
+                 "scale=1080:608:force_original_aspect_ratio=increase:flags=lanczos,crop=1080:608,setsar=1[kam];"
+                 "[h]scale=1080:1312:force_original_aspect_ratio=increase:flags=lanczos,crop=1080:1312,setsar=1"
+                 + filtr_priblizeni(zoom_casy, fps, 1080, 1312) + "[hra];"
+                 "[kam][hra]vstack=inputs=2,setsar=1")
     else:
         # Ořez na střed obrazu
         obraz = ("[0:v]scale=1080:1920:force_original_aspect_ratio=increase:flags=lanczos,"
-                 "crop=1080:1920,setsar=1")
+                 "crop=1080:1920,setsar=1" + filtr_priblizeni(zoom_casy, fps, 1080, 1920))
     # Titulky: ffmpeg spouštíme přímo ve složce s .ass souborem, takže stačí krátký
     # název souboru (vyhneme se problémům s dvojtečkou v cestě C:\ ve Windows).
-    obraz += f",ass='{ass_soubor.name}',format=yuv420p[v]"
+    obraz += f",ass='{ass_soubor.name}'"
+    if nahled:
+        obraz += ",scale=540:960"
+    obraz += ",format=yuv420p[v]"
 
     zvuk = f"afade=t=in:d=0.15,afade=t=out:st={max(0.0, delka - 0.35):.2f}:d=0.35"
 
     def prikaz(kodek):
-        if kodek == "amd":
+        if nahled:
+            video_kodek = ["-c:v", "libx264", "-preset", "ultrafast", "-crf", "30"]
+        elif kodek == "amd":
             video_kodek = ["-c:v", "h264_amf", "-quality", "quality", "-rc", "cqp",
                            "-qp_i", "20", "-qp_p", "22", "-qp_b", "24"]
         else:
@@ -822,11 +1077,10 @@ def vyrenderuj_klip(video, start, konec, ass_obsah, cil, rozostrene_pozadi, pouz
                  "-filter_complex", obraz, "-map", "[v]", "-map", "0:a:0?",
                  "-af", zvuk]
                 + video_kodek
-                + ["-c:a", "aac", "-b:a", "192k", "-ar", "48000",
-                   "-movflags", "+faststart", str(cil.resolve())])
+                + ["-c:a", "aac", "-b:a", "96k" if nahled else "192k", "-ar", "48000",
+                   "-movflags", "+faststart", str(Path(cil).resolve())])
 
-    global AMD_NEFUNGUJE
-    if pouzit_amd and not AMD_NEFUNGUJE:
+    if nast["amd"] and not AMD_NEFUNGUJE and not nahled:
         try:
             spust_prikaz(prikaz("amd"), cwd=pracovni)
             return
@@ -840,69 +1094,61 @@ def vyrenderuj_klip(video, start, konec, ass_obsah, cil, rozostrene_pozadi, pouz
 #  HLAVNÍ POSTUP
 # =============================================================================
 
-def zpracuj(vstup_text, nahrany_soubor, nazev_hry, rezim_ai, claude_model, api_klic,
-            pocet, min_d, max_d, whisper_model, rozostrene, velka_pismena, pouzit_amd, log):
+def analyzuj(vstup, nast, log, pocet_navrhu=None):
+    """Kroky 1–4: získá video, přepíše řeč, změří hlasitost a navrhne momenty.
+    Vrací slovník se vším, co je potřeba pro náhledy a výrobu klipů."""
     najdi_ffmpeg()
     PRACOVNI_DIR.mkdir(parents=True, exist_ok=True)
-    VYSTUP_DIR.mkdir(parents=True, exist_ok=True)
-    pocet, min_d, max_d = int(pocet), float(min_d), float(max_d)
-    if min_d > max_d:
-        min_d, max_d = max_d, min_d
+    pocet = int(pocet_navrhu or nast["pocet"])
+    min_d, max_d = sorted((float(nast["min_d"]), float(nast["max_d"])))
 
-    # --- 1) vstupní video ---
-    vstup_text = (vstup_text or "").strip().strip('"')
-    if nahrany_soubor:
-        video, titul = Path(nahrany_soubor), Path(nahrany_soubor).stem
-        log(f"📁 Používám nahraný soubor: {video.name}")
-    elif vstup_text and je_odkaz(vstup_text):
-        video, titul = stahni_z_youtube(vstup_text, log)
-    elif vstup_text and Path(vstup_text).exists():
-        video, titul = Path(vstup_text), Path(vstup_text).stem
-        log(f"📁 Používám soubor z disku: {video}")
-    else:
-        raise RuntimeError("Vlož odkaz na YouTube, cestu k souboru, nebo nahraj MP4 soubor.")
-
-    delka_s = delka_videa(video)
+    video, titul = priprav_video(vstup, log)
+    delka_s, fps = info_o_videu(video)
     log(f"⏱️  Délka videa: {cas_text(delka_s)}")
     slozka = pracovni_slozka_pro(video)
 
-    # --- 2) zvuk, hlasitost, přepis ---
     wav = vytahni_zvuk(video, slozka, log)
     vzruseni = spocitej_vzruseni(wav, slozka, log)
-    slova = prepis_rec(wav, slozka, whisper_model, log)
+    slova = prepis_rec(wav, slozka, nast["whisper_model"], nast["jazyk_reci"], log)
     vety = vytvor_vety(slova)
 
-    # --- 3) výběr momentů ---
     klipy = None
-    if rezim_ai:
+    if nast["rezim_ai"]:
         try:
-            klipy = vyber_claude(vety, vzruseni, delka_s, pocet, min_d, max_d,
-                                 claude_model, nacti_api_klic(api_klic), nazev_hry, log)
+            klipy = vyber_claude(vety, vzruseni, delka_s, pocet, min_d, max_d, nast, log)
         except Exception as e:
             log(f"⚠️ Výběr přes Claude se nepovedl: {e}")
             log("   Pokračuji variantou zdarma.")
     if not klipy:
-        klipy = vyber_zdarma(vety, vzruseni, delka_s, pocet, min_d, max_d, log)
+        klipy = vyber_zdarma(vety, vzruseni, delka_s, pocet, min_d, max_d, nast["jazyk_reci"], log)
     if not klipy:
         raise RuntimeError("Nepodařilo se najít žádný vhodný úsek (je video dost dlouhé?).")
 
-    # --- 4) výstupní složka ---
-    razitko = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M")
-    cilova = VYSTUP_DIR / f"{nazev_souboru(titul, 40)}_{razitko}"
+    return {"video": str(video), "titul": titul, "delka": delka_s, "fps": fps,
+            "slozka": str(slozka), "slova": slova, "klipy": klipy}
+
+
+def vyrob_klipy(analyza, klipy, nast, log):
+    """Krok 5–6: vyrobí vybrané klipy a soubor popisky.txt. Vrací (seznam souborů, složka)."""
+    VYSTUP_DIR.mkdir(parents=True, exist_ok=True)
+    vzruseni = np.load(Path(analyza["slozka"]) / "vzruseni.npy")
+    razitko = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    cilova = VYSTUP_DIR / f"{nazev_souboru(analyza['titul'], 40)}_{razitko}"
     cilova.mkdir(parents=True, exist_ok=True)
 
-    zakladni_tagy = ["#shorts", "#ps5", "#gaming", "#cz", "#czsk"]
-    if nazev_hry:
-        zakladni_tagy.insert(1, "#" + re.sub(r"[^A-Za-z0-9]", "", bez_diakritiky(nazev_hry)))
+    if nast["jazyk_textu"] == "en":
+        zakladni_tagy = ["#shorts", "#ps5", "#gaming", "#gameplay", "#fyp"]
+    else:
+        zakladni_tagy = ["#shorts", "#ps5", "#gaming", "#cz", "#czsk"]
+    if nast["nazev_hry"]:
+        zakladni_tagy.insert(1, "#" + re.sub(r"[^A-Za-z0-9]", "", bez_diakritiky(nast["nazev_hry"])))
 
-    # --- 5) render klipů ---
     hotove, popisky = [], []
     for n, k in enumerate(klipy, start=1):
         soubor = cilova / f"{n:02d}_{nazev_souboru(k['nazev'])}.mp4"
         log(f"🎬 Klip {n}/{len(klipy)}: {cas_text(k['start'])}–{cas_text(k['konec'])} "
             f"({k['konec'] - k['start']:.0f} s) „{k['nazev']}“")
-        ass = vytvor_titulky(slova, k["start"], k["konec"], velka_pismena)
-        vyrenderuj_klip(video, k["start"], k["konec"], ass, soubor, rozostrene, pouzit_amd, log)
+        vyrenderuj_klip(analyza["video"], k, analyza["slova"], vzruseni, analyza["fps"], nast, soubor, log)
         hotove.append(str(soubor))
 
         tagy = []
@@ -915,6 +1161,7 @@ def zpracuj(vstup_text, nahrany_soubor, nazev_hry, rezim_ai, claude_model, api_k
             f"Čas v původním videu: {cas_text(k['start'])} – {cas_text(k['konec'])} "
             f"({k['konec'] - k['start']:.0f} s)\n"
             f"Název: {k['nazev']}\n"
+            f"Nadpis ve videu: {k.get('nadpis', '')}\n"
             f"Popis: {k['popis']}\n"
             f"Hashtagy: {' '.join(tagy[:8])}\n"
             f"Proč tento moment: {k.get('duvod', '')}\n"
@@ -924,55 +1171,36 @@ def zpracuj(vstup_text, nahrany_soubor, nazev_hry, rezim_ai, claude_model, api_k
     shutil.rmtree(cilova / "_docasne", ignore_errors=True)
     log(f"\n🎉 HOTOVO! {len(hotove)} klipů je ve složce:\n   {cilova}")
     log("   Názvy a popisy najdeš v souboru popisky.txt.")
+    return hotove + [str(cilova / "popisky.txt")], cilova
+
+
+def otevri_slozku(slozka):
     if sys.platform.startswith("win"):
         try:
-            os.startfile(cilova)      # otevře složku v Průzkumníku
+            os.startfile(slozka)      # otevře složku v Průzkumníku
         except Exception:
             pass
-    return hotove + [str(cilova / "popisky.txt")]
 
 
-# =============================================================================
-#  OVLÁDACÍ OKNO (Gradio – otevře se v prohlížeči)
-# =============================================================================
-
-def spustit_z_okna(vstup_text, nahrany_soubor, nazev_hry, rezim, claude_model, api_klic,
-                   pocet, min_d, max_d, whisper_model, format_videa, velka_pismena, pouzit_amd):
-    """Spustí zpracování ve vedlejším vlákně a průběžně posílá výpis do okna."""
-    fronta = queue.Queue()
-    vysledek = {}
-
-    def log(zprava, prepsat=False):
-        print(zprava)
-        fronta.put(("prepsat" if prepsat else "pridat", zprava))
-
-    def prace():
+def zpracuj_vse(vstupy, nast, log):
+    """Více videí najednou: každé zanalyzuje a rovnou vyrobí nejlepší klipy (bez kontroly)."""
+    vsechny, posledni = [], None
+    for c, vstup in enumerate(vstupy, start=1):
+        log(f"\n━━━━━━━━ Video {c}/{len(vstupy)} ━━━━━━━━")
         try:
-            vysledek["soubory"] = zpracuj(
-                vstup_text, nahrany_soubor, nazev_hry, rezim.startswith("Claude"),
-                claude_model, api_klic, pocet, min_d, max_d, whisper_model,
-                format_videa.startswith("Rozostřené"), velka_pismena, pouzit_amd, log)
+            analyza = analyzuj(vstup, nast, log)
+            soubory, posledni = vyrob_klipy(analyza, analyza["klipy"], nast, log)
+            vsechny.extend(soubory)
         except Exception as e:
-            log(f"\n❌ CHYBA: {e}")
-            log("\n(Technické detaily pro hledání chyby:)\n" + traceback.format_exc())
-        finally:
-            fronta.put(None)
+            log(f"❌ Video {c} se nepodařilo zpracovat: {e}")
+    if posledni:
+        otevri_slozku(posledni.parent if len(vstupy) > 1 else posledni)
+    return vsechny
 
-    threading.Thread(target=prace, daemon=True).start()
-    radky, posledni_prepsatelny = [], False
-    while True:
-        polozka = fronta.get()
-        if polozka is None:
-            break
-        druh, zprava = polozka
-        if druh == "prepsat" and posledni_prepsatelny and radky:
-            radky[-1] = zprava              # průběh (procenta) přepisuje poslední řádek
-        else:
-            radky.append(zprava)
-        posledni_prepsatelny = druh == "prepsat"
-        yield "\n".join(radky[-400:]), None
-    yield "\n".join(radky[-400:]), vysledek.get("soubory")
 
+# =============================================================================
+#  VZHLED OKNA
+# =============================================================================
 
 VZHLED_CSS = """
 :root, .dark {
@@ -1029,13 +1257,13 @@ input[type=text], input[type=password], input[type=number], textarea {
 input[type=text]:focus, input[type=password]:focus, textarea:focus { border-color: #a78bfa !important; box-shadow: 0 0 0 3px rgba(139,92,246,0.25) !important; }
 
 /* Tlačítko Spustit */
-#spustit {
+#spustit, #vytvorit {
     background: var(--sm-gradient) !important; border: none !important; color: white !important;
     font-size: 20px !important; font-weight: 900 !important; letter-spacing: 0.3px;
     padding: 18px !important; border-radius: 16px !important; margin-top: 6px;
     box-shadow: 0 12px 34px rgba(236,72,153,0.35); transition: transform .15s ease, filter .15s ease;
 }
-#spustit:hover { transform: translateY(-2px); filter: brightness(1.08); }
+#spustit:hover, #vytvorit:hover { transform: translateY(-2px); filter: brightness(1.08); }
 
 /* Výpis průběhu */
 #vypis textarea {
@@ -1049,16 +1277,231 @@ input[type=checkbox], input[type=radio] { accent-color: #a855f7; }
 /* Vybraná volba v přepínači */
 label.selected { background: var(--sm-gradient) !important; color: white !important; border-color: transparent !important; }
 
+#vytvorit { font-size: 17px !important; padding: 14px !important; }
+#tabulka, #tabulka * { font-family: "Inter", "Segoe UI", system-ui, sans-serif !important; font-size: 13.5px; }
 """
 
 # Vynutí tmavý režim stránky.
 VZHLED_JS = "() => { document.body.classList.add('dark'); }"
 
 
+# =============================================================================
+#  OVLÁDACÍ OKNO (Gradio – otevře se v prohlížeči)
+# =============================================================================
+
+def sloz_nastaveni(rezim, claude_model, api_klic, jazyk_reci, jazyk_textu, titulky_dialogy,
+                   rozlozeni, kamera_pozice, kamera_velikost, nadpis, priblizeni,
+                   pocet, min_d, max_d, whisper_model, velka_pismena, amd, nazev_hry):
+    """Posbírá všechna nastavení z okna do jednoho slovníku."""
+    return {
+        "rezim_ai": str(rezim).startswith("Claude"),
+        "claude_model": claude_model or CLAUDE_MODELY[0][1],
+        "api_klic": api_klic or "",
+        "jazyk_reci": JAZYKY_RECI.get(jazyk_reci, "cs"),
+        "jazyk_textu": JAZYKY_TEXTU.get(jazyk_textu, "cs"),
+        "titulky_dialogy": bool(titulky_dialogy),
+        "rozlozeni": ROZLOZENI.get(rozlozeni, "stred"),
+        "kamera_pozice": kamera_pozice or POZICE_KAMERY[0],
+        "kamera_velikost": float(kamera_velikost or 25),
+        "nadpis": bool(nadpis),
+        "priblizeni": bool(priblizeni),
+        "pocet": int(pocet), "min_d": float(min_d), "max_d": float(max_d),
+        "whisper_model": whisper_model or "small",
+        "velka_pismena": bool(velka_pismena),
+        "amd": bool(amd),
+        "nazev_hry": (nazev_hry or "").strip(),
+    }
+
+
+def nacti_vstupy(text, soubory):
+    """Každý řádek textu = jeden odkaz nebo cesta; k tomu nahrané soubory."""
+    vstupy = [r.strip().strip('"') for r in (text or "").splitlines() if r.strip()]
+    for s in soubory or []:
+        vstupy.append(s if isinstance(s, str) else getattr(s, "name", str(s)))
+    return vstupy
+
+
+def na_pozadi(prace):
+    """Spustí prace(log) ve vedlejším vlákně. Průběžně vrací (výpis, hotovo, výsledek)."""
+    fronta = queue.Queue()
+    vysledek = {}
+
+    def log(zprava, prepsat=False):
+        print(zprava)
+        fronta.put(("prepsat" if prepsat else "pridat", zprava))
+
+    def vlakno():
+        try:
+            vysledek["ok"] = prace(log)
+        except Exception as e:
+            log(f"\n❌ CHYBA: {e}")
+            log("\n(Technické detaily pro hledání chyby:)\n" + traceback.format_exc())
+        finally:
+            fronta.put(None)
+
+    threading.Thread(target=vlakno, daemon=True).start()
+    radky, posledni_prepsatelny = [], False
+    while True:
+        polozka = fronta.get()
+        if polozka is None:
+            break
+        druh, zprava = polozka
+        if druh == "prepsat" and posledni_prepsatelny and radky:
+            radky[-1] = zprava              # průběh (procenta) přepisuje poslední řádek
+        else:
+            radky.append(zprava)
+        posledni_prepsatelny = druh == "prepsat"
+        yield "\n".join(radky[-400:]), False, None
+    yield "\n".join(radky[-400:]), True, vysledek.get("ok")
+
+
+SLOUPCE_TABULKY = ["✔", "Začátek", "Konec", "Délka", "Nadpis ve videu", "Název", "Co se tam říká"]
+
+
+def prepis_useku(slova, od, do):
+    return " ".join(w["w"] for w in slova if w["s"] >= od - 0.05 and w["e"] <= do + 0.3)
+
+
+def radky_tabulky(analyza, pocet):
+    radky = []
+    for i, k in enumerate(analyza["klipy"]):
+        radky.append([i < pocet, cas_presny(k["start"]), cas_presny(k["konec"]),
+                      f"{k['konec'] - k['start']:.0f} s", k.get("nadpis", ""), k["nazev"],
+                      zkrat(prepis_useku(analyza["slova"], k["start"], k["konec"]), 120)])
+    return radky
+
+
+def je_zaskrtnuto(hodnota):
+    return hodnota is True or str(hodnota).strip().lower() in ("true", "1", "ano", "x", "✔")
+
+
+def radky_z_tabulky(tabulka):
+    if tabulka is None:
+        return []
+    if hasattr(tabulka, "values"):          # kdyby Gradio vrátilo pandas tabulku
+        return tabulka.values.tolist()
+    return list(tabulka)
+
+
+def klip_z_radku(analyza, i, radek):
+    """Vezme původní návrh č. i a přepíše ho hodnotami, které jsi upravil v tabulce."""
+    k = dict(analyza["klipy"][i])
+    k["start"] = max(0.0, precti_cas(radek[1]))
+    k["konec"] = min(precti_cas(radek[2]), analyza["delka"] or 1e9)
+    if k["konec"] - k["start"] < 3:
+        raise ValueError(f"Řádek {i + 1}: konec musí být aspoň 3 s po začátku.")
+    if k["konec"] - k["start"] > 180:
+        raise ValueError(f"Řádek {i + 1}: klip je delší než 3 minuty.")
+    k["nadpis"] = bez_emoji(str(radek[4] or ""))[:60]
+    k["nazev"] = str(radek[5] or "").strip() or k["nazev"]
+    return k
+
+
 def vytvor_okno():
     import gradio as gr
 
+    def ukaz_klic(r):
+        return gr.Textbox(visible=str(r).startswith("Claude"))
+
+    def ukaz_dialogy(j):
+        return gr.Checkbox(visible=JAZYKY_RECI.get(j) == "mix")
+
+    def ukaz_kameru(r):
+        viditelne = ROZLOZENI.get(r) == "kamera"
+        return gr.Dropdown(visible=viditelne), gr.Slider(visible=viditelne)
+
+    # ---------- tlačítko Spustit ----------
+    def spustit(text, soubory, kontrola, *hodnoty):
+        nast = sloz_nastaveni(*hodnoty)
+        vstupy = nacti_vstupy(text, soubory)
+        skryj = gr.Column(visible=False)
+        if not vstupy:
+            yield ("❌ Vlož odkaz na YouTube, cestu k souboru, nebo nahraj MP4 soubor.",
+                   None, skryj, gr.skip(), None)
+            return
+
+        if kontrola and len(vstupy) == 1:
+            prace = lambda log: analyzuj(vstupy[0], nast, log, nast["pocet"] + NAVRHU_NAVIC)
+            prvni = True
+            for vypis, hotovo, vysl in na_pozadi(prace):
+                if not hotovo:
+                    yield vypis, None, (skryj if prvni else gr.skip()), gr.skip(), gr.skip()
+                    prvni = False
+                elif vysl:
+                    vypis += ("\n\n👇 Hotovo! Níže zkontroluj návrhy: odškrtni, co nechceš, "
+                              "případně uprav čas, nadpis nebo název a klikni na „Vytvořit klipy“.")
+                    yield (vypis, None, gr.Column(visible=True),
+                           radky_tabulky(vysl, nast["pocet"]), vysl)
+                else:
+                    yield vypis, None, gr.skip(), gr.skip(), gr.skip()
+        else:
+            if kontrola and len(vstupy) > 1:
+                yield ("ℹ️ Víc videí najednou se zpracuje automaticky (bez kontroly návrhů).",
+                       None, skryj, gr.skip(), None)
+            for vypis, hotovo, vysl in na_pozadi(lambda log: zpracuj_vse(vstupy, nast, log)):
+                yield vypis, (vysl if hotovo else None), skryj, gr.skip(), gr.skip()
+
+    # ---------- tlačítko Vytvořit klipy (po kontrole) ----------
+    def vytvorit_vybrane(analyza, tabulka, *hodnoty):
+        nast = sloz_nastaveni(*hodnoty)
+        if not analyza:
+            yield "❌ Nejdřív klikni na Spustit a počkej na návrhy.", None
+            return
+        try:
+            klipy = [klip_z_radku(analyza, i, r) for i, r in enumerate(radky_z_tabulky(tabulka))
+                     if i < len(analyza["klipy"]) and je_zaskrtnuto(r[0])]
+        except ValueError as e:
+            yield f"❌ {e}", None
+            return
+        if not klipy:
+            yield "❌ Není zaškrtnutý žádný klip.", None
+            return
+
+        def prace(log):
+            soubory, slozka = vyrob_klipy(analyza, klipy, nast, log)
+            otevri_slozku(slozka)
+            return soubory
+
+        for vypis, hotovo, vysl in na_pozadi(prace):
+            yield vypis, (vysl if hotovo else None)
+
+    # ---------- náhled ----------
+    def zapamatuj_radek(evt: gr.SelectData):
+        radek = evt.index[0] if isinstance(evt.index, (list, tuple)) else evt.index
+        return radek, f"Vybraný řádek: **{radek + 1}**. Klikni na „Ukázat náhled“."
+
+    def nahled(analyza, tabulka, radek, *hodnoty):
+        if not analyza:
+            raise gr.Error("Nejdřív klikni na Spustit a počkej na návrhy.")
+        radky = radky_z_tabulky(tabulka)
+        radek = int(radek or 0)
+        if radek >= len(radky) or radek >= len(analyza["klipy"]):
+            raise gr.Error("Klikni nejdřív do řádku v tabulce.")
+        try:
+            k = klip_z_radku(analyza, radek, radky[radek])
+        except ValueError as e:
+            raise gr.Error(str(e))
+        nast = sloz_nastaveni(*hodnoty)
+        slozka = Path(analyza["slozka"]) / "nahledy"
+        slozka.mkdir(exist_ok=True)
+        for stary in slozka.glob("nahled_*.mp4"):
+            try:
+                stary.unlink()
+            except OSError:
+                pass
+        cil = slozka / f"nahled_{int(time.time() * 1000)}.mp4"
+        vzruseni = np.load(Path(analyza["slozka"]) / "vzruseni.npy")
+        try:
+            vyrenderuj_klip(analyza["video"], k, analyza["slova"], vzruseni, analyza["fps"],
+                            nast, cil, print, nahled=True)
+        except Exception as e:
+            raise gr.Error(f"Náhled se nepovedl: {e}")
+        return str(cil)
+
     with gr.Blocks(title="Shorts Maker") as okno:
+        analyza = gr.State(None)
+        vybrany_radek = gr.State(0)
+
         gr.HTML("""
         <div id="hero">
           <div class="logo">🎬</div>
@@ -1066,10 +1509,10 @@ def vytvor_okno():
           <p>Z dlouhého streamu automaticky udělá krátká svislá videa s titulky
              pro YouTube Shorts a TikTok.</p>
           <div class="stitky">
-            <span class="stitek">🎙️ Přepis češtiny</span>
+            <span class="stitek">🎙️ Čeština i angličtina</span>
             <span class="stitek">🔥 Výběr nejlepších momentů</span>
-            <span class="stitek">📱 Formát 9:16</span>
-            <span class="stitek">💬 TikTok titulky</span>
+            <span class="stitek">🔍 Přiblížení v akci</span>
+            <span class="stitek">💬 TikTok titulky + nadpis</span>
           </div>
         </div>""")
 
@@ -1077,24 +1520,44 @@ def vytvor_okno():
             # --- Karta 1: video ---
             with gr.Column(elem_classes="karta"):
                 gr.HTML('<div class="nadpis-karty"><span>1</span>Video</div>'
-                        '<div class="napoveda">Vlož odkaz na YouTube, nebo cestu k souboru '
-                        '(pravé tlačítko na video → „Kopírovat jako cestu“).</div>')
-                vstup_text = gr.Textbox(show_label=False, container=False,
-                                        placeholder="https://www.youtube.com/watch?v=…  nebo  C:\\Videa\\stream.mp4")
-                nahrany = gr.File(label="…nebo přetáhni MP4 soubor sem", file_types=["video"],
-                                  type="filepath", height=130)
+                        '<div class="napoveda">Vlož odkaz na YouTube nebo cestu k souboru '
+                        '(pravé tlačítko na video → „Kopírovat jako cestu“). '
+                        'Víc videí najednou = každé na nový řádek.</div>')
+                vstup_text = gr.Textbox(show_label=False, container=False, lines=2, max_lines=8,
+                                        placeholder="https://www.youtube.com/watch?v=…\nC:\\Videa\\stream.mp4")
+                nahrane = gr.File(label="…nebo přetáhni MP4 soubory sem", file_types=["video"],
+                                  type="filepath", file_count="multiple", height=110)
+                kontrola = gr.Checkbox(value=True, label="Před vytvořením mi ukaž návrhy ke kontrole "
+                                                          "(jen u jednoho videa)")
 
-            # --- Karta 2: způsob výběru ---
+            # --- Karta 2: jazyk a výběr ---
             with gr.Column(elem_classes="karta"):
-                gr.HTML('<div class="nadpis-karty"><span>2</span>Výběr momentů</div>'
-                        '<div class="napoveda">Zdarma = podle hlasitosti a emotivních slov. '
-                        'Claude AI = chytřejší výběr a lepší názvy (pár korun za stream).</div>')
+                gr.HTML('<div class="nadpis-karty"><span>2</span>Jazyk a výběr momentů</div>')
+                jazyk_reci = gr.Dropdown(list(JAZYKY_RECI), value="Čeština", label="Jazyk řeči ve videu")
+                titulky_dialogy = gr.Checkbox(value=True, visible=False,
+                                              label="Dávat titulky i anglickým dialogům postav (modře)")
+                jazyk_textu = gr.Radio(list(JAZYKY_TEXTU), value="Čeština",
+                                       label="Jazyk názvů, popisů a nadpisu (překlad umí jen Claude AI)")
                 rezim = gr.Radio(["Zdarma (bez AI)", "Claude AI (placené)"],
-                                 value="Zdarma (bez AI)", show_label=False, container=False)
+                                 value="Zdarma (bez AI)", label="Výběr momentů")
                 api_klic = gr.Textbox(label="Claude API klíč (stačí jednou, program si ho zapamatuje)",
                                       type="password", placeholder="sk-ant-…", visible=False)
-                # Pole pro klíč se ukáže jen při výběru Claude AI
-                rezim.change(lambda r: gr.Textbox(visible=r.startswith("Claude")), rezim, api_klic)
+
+        # --- Karta 3: vzhled klipu ---
+        with gr.Column(elem_classes="karta"):
+            gr.HTML('<div class="nadpis-karty"><span>3</span>Vzhled klipu</div>')
+            with gr.Row():
+                with gr.Column():
+                    rozlozeni = gr.Radio(list(ROZLOZENI), value="Oříznout na střed",
+                                         label="Převod na svislé video")
+                    kamera_pozice = gr.Dropdown(POZICE_KAMERY, value=POZICE_KAMERY[0], visible=False,
+                                                label="Kde je ve videu tvoje kamera")
+                    kamera_velikost = gr.Slider(10, 50, value=25, step=1, visible=False,
+                                                label="Velikost kamery (% šířky obrazu) – ověř v náhledu")
+                with gr.Column():
+                    nadpis = gr.Checkbox(value=True, label="Velký nadpis v prvních 3 sekundách")
+                    priblizeni = gr.Checkbox(value=True, label="Přiblížení obrazu v akčních momentech")
+                    velka_pismena = gr.Checkbox(value=True, label="Titulky VELKÝMI PÍSMENY")
 
         # --- Pokročilé volby: není potřeba na ně sahat ---
         with gr.Accordion("⚙️  Pokročilé nastavení (není potřeba měnit)", open=False,
@@ -1105,35 +1568,59 @@ def vytvor_okno():
                     min_d = gr.Slider(15, 60, value=20, step=1, label="Minimální délka klipu (s)")
                     max_d = gr.Slider(20, 90, value=60, step=1, label="Maximální délka klipu (s)")
                     nazev_hry = gr.Textbox(label="Název hry (pro hashtagy, nepovinné)",
-                                           placeholder="např. GTA V")
-                    claude_model = gr.Dropdown([(m[0], m[1]) for m in CLAUDE_MODELY],
-                                               value=CLAUDE_MODELY[0][1], label="Model Claude")
+                                           placeholder="např. GTA 6")
                 with gr.Column():
                     whisper_model = gr.Dropdown(
                         [("small – rychlý, dobrý (doporučeno)", "small"),
                          ("large-v3-turbo – přesnější, asi 2× pomalejší", "large-v3-turbo"),
                          ("medium – přesnější, nejpomalejší", "medium")],
                         value="small", label="Přesnost přepisu řeči")
-                    format_videa = gr.Radio(["Oříznout na střed", "Rozostřené pozadí (celý obraz hry)"],
-                                            value="Oříznout na střed", label="Převod na svislé video")
-                    velka_pismena = gr.Checkbox(value=True, label="Titulky VELKÝMI PÍSMENY")
-                    pouzit_amd = gr.Checkbox(value=True, label="Kódovat video grafikou AMD (rychlejší; "
-                                                                "když nejde, použije se procesor)")
+                    claude_model = gr.Dropdown([(m[0], m[1]) for m in CLAUDE_MODELY],
+                                               value=CLAUDE_MODELY[0][1], label="Model Claude")
+                    amd = gr.Checkbox(value=True, label="Kódovat video grafikou AMD (rychlejší; "
+                                                         "když nejde, použije se procesor)")
 
-        tlacitko = gr.Button("🚀  Vytvořit klipy", variant="primary", elem_id="spustit")
+        tlacitko = gr.Button("🚀  Spustit", variant="primary", elem_id="spustit")
 
+        # --- Karta 4: kontrola návrhů (ukáže se po analýze) ---
+        with gr.Column(elem_classes="karta", visible=False) as panel_kontroly:
+            gr.HTML('<div class="nadpis-karty"><span>4</span>Kontrola návrhů</div>'
+                    '<div class="napoveda">Odškrtni klipy, které nechceš. Čas, nadpis i název můžeš '
+                    'přepsat (dvojklik do buňky). Pro náhled klikni do řádku a pak na „Ukázat náhled“.</div>')
+            tabulka = gr.Dataframe(headers=SLOUPCE_TABULKY,
+                                   datatype=["bool", "str", "str", "str", "str", "str", "str"],
+                                   type="array", interactive=True, wrap=True, static_columns=[3, 6], elem_id="tabulka",
+                                   column_widths=["6%", "10%", "10%", "8%", "20%", "22%", "24%"])
+            with gr.Row():
+                with gr.Column(scale=1):
+                    info_radek = gr.Markdown("Klikni do řádku v tabulce a pak na „Ukázat náhled“.")
+                    tlacitko_nahled = gr.Button("👁️  Ukázat náhled")
+                    tlacitko_vytvorit = gr.Button("🎬  Vytvořit zaškrtnuté klipy", variant="primary",
+                                                  elem_id="vytvorit")
+                with gr.Column(scale=1):
+                    video_nahled = gr.Video(label="Náhled", height=480, autoplay=True)
+
+        # --- Karta 5: průběh ---
         with gr.Column(elem_classes="karta"):
-            gr.HTML('<div class="nadpis-karty"><span>3</span>Průběh a výsledky</div>')
-            vypis = gr.Textbox(show_label=False, lines=14, max_lines=30, autoscroll=True,
+            gr.HTML('<div class="nadpis-karty"><span>✓</span>Průběh a výsledky</div>')
+            vypis = gr.Textbox(show_label=False, lines=12, max_lines=30, autoscroll=True,
                                elem_id="vypis", placeholder="Tady uvidíš, co program právě dělá…")
             soubory = gr.File(label="Hotové klipy (ke stažení)", file_count="multiple", height=120)
 
-        tlacitko.click(
-            spustit_z_okna,
-            inputs=[vstup_text, nahrany, nazev_hry, rezim, claude_model, api_klic,
-                    pocet, min_d, max_d, whisper_model, format_videa, velka_pismena, pouzit_amd],
-            outputs=[vypis, soubory],
-        )
+        # Pořadí musí odpovídat parametrům funkce sloz_nastaveni()
+        nastaveni = [rezim, claude_model, api_klic, jazyk_reci, jazyk_textu, titulky_dialogy,
+                     rozlozeni, kamera_pozice, kamera_velikost, nadpis, priblizeni,
+                     pocet, min_d, max_d, whisper_model, velka_pismena, amd, nazev_hry]
+
+        rezim.change(ukaz_klic, rezim, api_klic)
+        jazyk_reci.change(ukaz_dialogy, jazyk_reci, titulky_dialogy)
+        rozlozeni.change(ukaz_kameru, rozlozeni, [kamera_pozice, kamera_velikost])
+
+        tlacitko.click(spustit, [vstup_text, nahrane, kontrola] + nastaveni,
+                       [vypis, soubory, panel_kontroly, tabulka, analyza])
+        tabulka.select(zapamatuj_radek, None, [vybrany_radek, info_radek])
+        tlacitko_nahled.click(nahled, [analyza, tabulka, vybrany_radek] + nastaveni, video_nahled)
+        tlacitko_vytvorit.click(vytvorit_vybrane, [analyza, tabulka] + nastaveni, [vypis, soubory])
     return okno
 
 
@@ -1149,5 +1636,5 @@ def vzhled():
 if __name__ == "__main__":
     print("Spouštím Shorts Maker… okno se otevře v prohlížeči.")
     print("Tohle černé okno NEZAVÍREJ, dokud program používáš.")
-    vytvor_okno().queue().launch(inbrowser=True, allowed_paths=[str(VYSTUP_DIR)],
+    vytvor_okno().queue().launch(inbrowser=True, allowed_paths=[str(VYSTUP_DIR), str(PRACOVNI_DIR)],
                                  theme=vzhled(), css=VZHLED_CSS, js=VZHLED_JS)

@@ -27,12 +27,40 @@ Stažený ZIP otevři, klikni na **Extrahovat vše** a rozbal ho třeba na ploch
 
 ## 2. Použití
 
-1. Do horního pole vlož **odkaz na YouTube** nebo **cestu k souboru**. Cestu zkopíruješ tak,
-   že na video klikneš pravým tlačítkem a vybereš **Kopírovat jako cestu**.
-2. Vyber **Zdarma** nebo **Claude AI**.
-3. Klikni na **🚀 Spustit**. Na konci se sama otevře složka s hotovými klipy a souborem `popisky.txt`.
+1. **Video:** vlož odkaz na YouTube nebo cestu k souboru. Cestu zkopíruješ tak, že na video
+   klikneš pravým tlačítkem a vybereš **Kopírovat jako cestu**.
+   Víc videí najednou: každé dej na nový řádek. Zpracují se automaticky jedno po druhém,
+   třeba přes noc.
+2. **Jazyk:**
+   * *Jazyk řeči ve videu*: **Čeština**, **Angličtina**, nebo **Čeština + angličtina**
+     (ty mluvíš česky a postavy ve hře anglicky). U mixu můžeš zvolit, jestli mají mít
+     titulky i anglické dialogy. Ty se pak zobrazí světle modře.
+   * *Jazyk názvů, popisů a nadpisu*: **Čeština** nebo **English**. Přeložit do jiného jazyka
+     než ve videu umí jen režim Claude AI.
+3. **Vzhled klipu:**
+   * **Oříznout na střed**, **Rozostřené pozadí** (vidět je celý obraz hry), nebo
+     **Kamera nahoře + hra dole**. U kamery zvol, ve kterém rohu videa je, a podle náhledu
+     dolaď její velikost.
+   * **Velký nadpis** v prvních 3 sekundách, aby divák neodscrolloval.
+   * **Přiblížení** obrazu v nejhlasitějších momentech (výbuchy, výkřiky).
+4. Klikni na **🚀 Spustit**.
+5. **Kontrola návrhů:** zobrazí se tabulka s návrhy (o pár víc, než kolik chceš klipů).
+   * Odškrtni klipy, které nechceš.
+   * Dvojklikem do buňky můžeš přepsat začátek, konec, nadpis nebo název.
+   * Klikni do řádku a pak na **👁️ Ukázat náhled**, uvidíš, jak bude klip vypadat.
+   * Nakonec klikni na **🎬 Vytvořit zaškrtnuté klipy**.
+6. Otevře se složka s hotovými klipy a souborem `popisky.txt` (názvy, popisy, hashtagy).
 
-Ostatní volby jsou schované v sekci **Pokročilé nastavení** a nemusíš je měnit.
+Kontrolu návrhů můžeš vypnout zaškrtávátkem v kartě „Video“. Klipy se pak vytvoří rovnou.
+
+### Tipy pro GTA a jiné hry
+
+* **Rádio v autě vypni nebo ztiš.** Licencovaná hudba spustí na YouTube nárok na autorská
+  práva a TikTok může ztlumit zvuk.
+* **Na PS5 nahrávej bez HDR**, jinak video na PC vypadá vybledle.
+* Program nejlépe funguje, když u hraní **mluvíš**. Hlášky, smích a výkřiky mu napoví,
+  kde je dobrý moment.
+* Ideální délka klipu je 20–45 s. Nejdůležitější jsou první 2 sekundy.
 
 ### Jak dlouho to trvá (3hodinový stream, běžný 6–8jádrový procesor)
 
@@ -104,4 +132,6 @@ Na začátku souboru `shorts_maker.py` (otevři ho v Poznámkovém bloku) je č�
 * `TITULKY_VELIKOST`, `TITULKY_FONT`, `TITULKY_OD_SPODU`: velikost, písmo a výška titulků,
 * `BARVA_ZVYRAZNENI`: barva aktuálního slova. Píše se ve formátu `&H00BBGGRR&`, tedy obráceně
   (modrá, zelená, červená). Žlutá je `&H0000FFFF&`, zelená `&H0000FF00&`, růžová `&H00FF00FF&`.
-* `KLICOVA_SLOVA`: tvoje oblíbené hlášky, které mají zvýšit šanci na výběr.
+* `KLICOVA_SLOVA_CS` / `KLICOVA_SLOVA_EN`: tvoje oblíbené hlášky, které mají zvýšit šanci na výběr,
+* `NADPIS_VELIKOST`, `NADPIS_DELKA`: velikost a délka zobrazení úvodního nadpisu,
+* `PRIBLIZENI_SILA`, `PRIBLIZENI_PRAH`: jak moc a jak často se obraz přibližuje.
