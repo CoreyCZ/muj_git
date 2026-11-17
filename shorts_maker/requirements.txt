@@ -1,5 +1,5 @@
 faster-whisper
 yt-dlp[default]
-gradio
+gradio>=6
 anthropic
 numpy

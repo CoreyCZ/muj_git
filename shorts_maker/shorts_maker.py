@@ -974,25 +974,131 @@ def spustit_z_okna(vstup_text, nahrany_soubor, nazev_hry, rezim, claude_model, a
     yield "\n".join(radky[-400:]), vysledek.get("soubory")
 
 
+VZHLED_CSS = """
+:root, .dark {
+    --sm-bg: #0a0b12;
+    --sm-karta: rgba(255,255,255,0.035);
+    --sm-okraj: rgba(255,255,255,0.08);
+    --sm-text: #e7e9f3;
+    --sm-tlumeny: #9aa0b8;
+    --sm-gradient: linear-gradient(100deg, #8b5cf6 0%, #ec4899 55%, #f97316 100%);
+}
+body, gradio-app, .gradio-container {
+    background:
+        radial-gradient(900px 500px at 0% -10%, rgba(139,92,246,0.22), transparent 60%),
+        radial-gradient(800px 450px at 100% 0%, rgba(236,72,153,0.16), transparent 60%),
+        var(--sm-bg) !important;
+    color: var(--sm-text);
+}
+.gradio-container { max-width: 1040px !important; margin: 0 auto !important; padding: 12px 16px 40px !important; }
+footer { display: none !important; }
+
+/* Hlavička */
+#hero { text-align: center; padding: 34px 10px 14px; }
+#hero .logo { font-size: 46px; line-height: 1; }
+#hero h1 {
+    font-size: clamp(34px, 6vw, 54px); font-weight: 900; letter-spacing: -1.5px; margin: 10px 0 6px;
+    background: var(--sm-gradient) !important; -webkit-background-clip: text !important; background-clip: text !important;
+    color: transparent !important; -webkit-text-fill-color: transparent !important; display: inline-block;
+}
+#hero p { color: var(--sm-tlumeny); font-size: 17px; margin: 0 auto; max-width: 620px; }
+#hero .stitky { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-top: 18px; }
+#hero .stitek {
+    font-size: 13px; padding: 6px 12px; border-radius: 999px; color: var(--sm-text);
+    background: rgba(255,255,255,0.05); border: 1px solid var(--sm-okraj);
+}
+
+/* Karty */
+.karta {
+    background: var(--sm-karta) !important; border: 1px solid var(--sm-okraj) !important;
+    border-radius: 20px !important; padding: 20px !important;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.25); backdrop-filter: blur(6px);
+}
+.karta .block, .karta .form { background: transparent !important; border: none !important; box-shadow: none !important; }
+.nadpis-karty { font-size: 18px; font-weight: 800; margin: 0 0 6px; color: var(--sm-text); }
+.nadpis-karty span {
+    display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px;
+    border-radius: 9px; margin-right: 8px; font-size: 15px; color: white; background: var(--sm-gradient);
+}
+.napoveda { color: var(--sm-tlumeny); font-size: 13.5px; margin: 0 0 4px; }
+
+input[type=text], input[type=password], input[type=number], textarea {
+    background: rgba(0,0,0,0.35) !important; border: 1px solid var(--sm-okraj) !important;
+    border-radius: 12px !important; color: var(--sm-text) !important;
+}
+input[type=text]:focus, input[type=password]:focus, textarea:focus { border-color: #a78bfa !important; box-shadow: 0 0 0 3px rgba(139,92,246,0.25) !important; }
+
+/* Tlačítko Spustit */
+#spustit {
+    background: var(--sm-gradient) !important; border: none !important; color: white !important;
+    font-size: 20px !important; font-weight: 900 !important; letter-spacing: 0.3px;
+    padding: 18px !important; border-radius: 16px !important; margin-top: 6px;
+    box-shadow: 0 12px 34px rgba(236,72,153,0.35); transition: transform .15s ease, filter .15s ease;
+}
+#spustit:hover { transform: translateY(-2px); filter: brightness(1.08); }
+
+/* Výpis průběhu */
+#vypis textarea {
+    font-family: ui-monospace, "Cascadia Code", Consolas, monospace !important; font-size: 13.5px !important;
+    line-height: 1.55 !important; background: #05060b !important;
+}
+.karta-pokrocile {
+    border-radius: 16px !important; background: var(--sm-karta) !important; border: 1px solid var(--sm-okraj) !important;
+}
+input[type=checkbox], input[type=radio] { accent-color: #a855f7; }
+/* Vybraná volba v přepínači */
+label.selected { background: var(--sm-gradient) !important; color: white !important; border-color: transparent !important; }
+
+"""
+
+# Vynutí tmavý režim stránky.
+VZHLED_JS = "() => { document.body.classList.add('dark'); }"
+
+
 def vytvor_okno():
     import gradio as gr
 
     with gr.Blocks(title="Shorts Maker") as okno:
-        gr.Markdown("# 🎬 Shorts Maker\nZ dlouhého streamu udělá krátká svislá videa s titulky "
-                    "pro YouTube Shorts a TikTok.")
-        # --- To hlavní: co zpracovat a jak vybírat ---
-        vstup_text = gr.Textbox(
-            label="1) Vlož odkaz na YouTube video NEBO cestu k MP4 souboru",
-            placeholder="https://www.youtube.com/watch?v=…   nebo   C:\\Videa\\stream.mp4")
-        nahrany = gr.File(label="…nebo sem přetáhni MP4 soubor", file_types=["video"], type="filepath")
-        rezim = gr.Radio(["Zdarma (bez AI)", "Claude AI (placené, chytřejší výběr a názvy)"],
-                         value="Zdarma (bez AI)", label="2) Jak vybírat nejlepší momenty")
-        api_klic = gr.Textbox(label="Claude API klíč – jen pokud jsi vybral Claude AI "
-                                    "(stačí jednou, program si ho zapamatuje)",
-                              type="password", placeholder="sk-ant-…")
+        gr.HTML("""
+        <div id="hero">
+          <div class="logo">🎬</div>
+          <h1 style="background-image: linear-gradient(100deg, #8b5cf6 0%, #ec4899 55%, #f97316 100%); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; color: transparent;">Shorts Maker</h1>
+          <p>Z dlouhého streamu automaticky udělá krátká svislá videa s titulky
+             pro YouTube Shorts a TikTok.</p>
+          <div class="stitky">
+            <span class="stitek">🎙️ Přepis češtiny</span>
+            <span class="stitek">🔥 Výběr nejlepších momentů</span>
+            <span class="stitek">📱 Formát 9:16</span>
+            <span class="stitek">💬 TikTok titulky</span>
+          </div>
+        </div>""")
+
+        with gr.Row(equal_height=True):
+            # --- Karta 1: video ---
+            with gr.Column(elem_classes="karta"):
+                gr.HTML('<div class="nadpis-karty"><span>1</span>Video</div>'
+                        '<div class="napoveda">Vlož odkaz na YouTube, nebo cestu k souboru '
+                        '(pravé tlačítko na video → „Kopírovat jako cestu“).</div>')
+                vstup_text = gr.Textbox(show_label=False, container=False,
+                                        placeholder="https://www.youtube.com/watch?v=…  nebo  C:\\Videa\\stream.mp4")
+                nahrany = gr.File(label="…nebo přetáhni MP4 soubor sem", file_types=["video"],
+                                  type="filepath", height=130)
+
+            # --- Karta 2: způsob výběru ---
+            with gr.Column(elem_classes="karta"):
+                gr.HTML('<div class="nadpis-karty"><span>2</span>Výběr momentů</div>'
+                        '<div class="napoveda">Zdarma = podle hlasitosti a emotivních slov. '
+                        'Claude AI = chytřejší výběr a lepší názvy (pár korun za stream).</div>')
+                rezim = gr.Radio(["Zdarma (bez AI)", "Claude AI (placené)"],
+                                 value="Zdarma (bez AI)", show_label=False, container=False)
+                api_klic = gr.Textbox(label="Claude API klíč (stačí jednou, program si ho zapamatuje)",
+                                      type="password", placeholder="sk-ant-…", visible=False)
+                # Pole pro klíč se ukáže jen při výběru Claude AI
+                rezim.change(lambda r: gr.Textbox(visible=r.startswith("Claude")), rezim, api_klic)
 
         # --- Pokročilé volby: není potřeba na ně sahat ---
-        with gr.Accordion("⚙️ Pokročilé nastavení (není potřeba měnit)", open=False):
+        with gr.Accordion("⚙️  Pokročilé nastavení (není potřeba měnit)", open=False,
+                          elem_classes="karta-pokrocile"):
             with gr.Row():
                 with gr.Column():
                     pocet = gr.Slider(5, 15, value=8, step=1, label="Počet klipů")
@@ -1013,9 +1119,14 @@ def vytvor_okno():
                     velka_pismena = gr.Checkbox(value=True, label="Titulky VELKÝMI PÍSMENY")
                     pouzit_amd = gr.Checkbox(value=True, label="Kódovat video grafikou AMD (rychlejší; "
                                                                 "když nejde, použije se procesor)")
-        tlacitko = gr.Button("3) 🚀 Spustit", variant="primary", size="lg")
-        vypis = gr.Textbox(label="Průběh", lines=18, max_lines=30, autoscroll=True)
-        soubory = gr.File(label="Hotové klipy (ke stažení)", file_count="multiple")
+
+        tlacitko = gr.Button("🚀  Vytvořit klipy", variant="primary", elem_id="spustit")
+
+        with gr.Column(elem_classes="karta"):
+            gr.HTML('<div class="nadpis-karty"><span>3</span>Průběh a výsledky</div>')
+            vypis = gr.Textbox(show_label=False, lines=14, max_lines=30, autoscroll=True,
+                               elem_id="vypis", placeholder="Tady uvidíš, co program právě dělá…")
+            soubory = gr.File(label="Hotové klipy (ke stažení)", file_count="multiple", height=120)
 
         tlacitko.click(
             spustit_z_okna,
@@ -1026,7 +1137,17 @@ def vytvor_okno():
     return okno
 
 
+def vzhled():
+    """Barevné téma okna (tmavé, fialovo-růžové)."""
+    import gradio as gr
+    return gr.themes.Base(
+        primary_hue="violet", secondary_hue="pink", neutral_hue="slate", radius_size="lg",
+        font=[gr.themes.GoogleFont("Inter"), "Segoe UI", "system-ui", "sans-serif"],
+    )
+
+
 if __name__ == "__main__":
     print("Spouštím Shorts Maker… okno se otevře v prohlížeči.")
     print("Tohle černé okno NEZAVÍREJ, dokud program používáš.")
-    vytvor_okno().queue().launch(inbrowser=True, allowed_paths=[str(VYSTUP_DIR)])
+    vytvor_okno().queue().launch(inbrowser=True, allowed_paths=[str(VYSTUP_DIR)],
+                                 theme=vzhled(), css=VZHLED_CSS, js=VZHLED_JS)
