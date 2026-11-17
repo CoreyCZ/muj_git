@@ -187,6 +187,13 @@ def bez_emoji(text):
     return re.sub(r"\s+", " ", t).strip()
 
 
+def tvar(n, jeden, dva_az_ctyri, pet_a_vic):
+    """Správný český tvar: 1 klip, 3 klipy, 5 klipů."""
+    if n == 1:
+        return f"{n} {jeden}"
+    return f"{n} {dva_az_ctyri if 2 <= n <= 4 else pet_a_vic}"
+
+
 def cas_text(sekundy):
     """123.4 -> '2:03', 3725 -> '1:02:05'"""
     s = int(round(sekundy))
@@ -674,7 +681,7 @@ def vyber_zdarma(vety, vzruseni, delka_s, pocet, min_d, max_d, jazyk_reci, log):
             nadpis = ""
             popis = "Moment ze streamu."
         k.update(nazev=nazev, nadpis=nadpis, popis=popis, hashtagy=[], duvod=f"skóre {k['skore']:.2f}")
-    log(f"✅ Nalezeno {len(vybrane)} momentů.")
+    log(f"✅ Nalezeno: {tvar(len(vybrane), 'moment', 'momenty', 'momentů')}.")
     return vybrane
 
 
@@ -846,14 +853,14 @@ def vyber_claude(vety, vzruseni, delka_s, pocet, min_d, max_d, nast, log):
             break
 
     if len(vybrane) < pocet:
-        log(f"   AI vrátila jen {len(vybrane)} použitelných klipů, doplním je variantou zdarma.")
+        log(f"   AI vrátila jen {len(vybrane)} použitelné návrhy, zbytek doplním variantou zdarma.")
         for k in vyber_zdarma(vety, vzruseni, delka_s, pocet * 3, min_d, max_d,
                               nast["jazyk_reci"], lambda *a, **b: None):
             if all(k["konec"] <= v["start"] or k["start"] >= v["konec"] for v in vybrane):
                 vybrane.append(k)
             if len(vybrane) >= pocet:
                 break
-    log(f"✅ Claude vybral {len(vybrane)} momentů.")
+    log(f"✅ Claude vybral {tvar(len(vybrane), 'moment', 'momenty', 'momentů')}.")
     return vybrane
 
 
@@ -1169,7 +1176,7 @@ def vyrob_klipy(analyza, klipy, nast, log):
 
     (cilova / "popisky.txt").write_text("\n".join(popisky), encoding="utf-8")
     shutil.rmtree(cilova / "_docasne", ignore_errors=True)
-    log(f"\n🎉 HOTOVO! {len(hotove)} klipů je ve složce:\n   {cilova}")
+    log(f"\n🎉 HOTOVO! Vytvořeno: {tvar(len(hotove), 'klip', 'klipy', 'klipů')}. Složka:\n   {cilova}")
     log("   Názvy a popisy najdeš v souboru popisky.txt.")
     return hotove + [str(cilova / "popisky.txt")], cilova
 
@@ -1222,13 +1229,9 @@ body, gradio-app, .gradio-container {
 footer { display: none !important; }
 
 /* Hlavička */
-#hero { text-align: center; padding: 34px 10px 14px; }
+#hero { text-align: center; padding: 22px 10px 6px; }
 #hero .logo { font-size: 46px; line-height: 1; }
-#hero h1 {
-    font-size: clamp(34px, 6vw, 54px); font-weight: 900; letter-spacing: -1.5px; margin: 10px 0 6px;
-    background: var(--sm-gradient) !important; -webkit-background-clip: text !important; background-clip: text !important;
-    color: transparent !important; -webkit-text-fill-color: transparent !important; display: inline-block;
-}
+#hero h1 { font-size: clamp(32px, 6vw, 50px); font-weight: 900; letter-spacing: -1.5px; margin: 6px 0 4px; }
 #hero p { color: var(--sm-tlumeny); font-size: 17px; margin: 0 auto; max-width: 620px; }
 #hero .stitky { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-top: 18px; }
 #hero .stitek {
@@ -1278,6 +1281,11 @@ input[type=checkbox], input[type=radio] { accent-color: #a855f7; }
 label.selected { background: var(--sm-gradient) !important; color: white !important; border-color: transparent !important; }
 
 #vytvorit { font-size: 17px !important; padding: 14px !important; }
+#stav {
+    text-align: center; font-size: 19px; font-weight: 700; padding: 16px 18px; border-radius: 16px;
+    background: rgba(255,255,255,0.04); border: 1px solid var(--sm-okraj); color: var(--sm-text);
+}
+#vstup textarea { font-size: 17px !important; padding: 14px !important; }
 #tabulka, #tabulka * { font-family: "Inter", "Segoe UI", system-ui, sans-serif !important; font-size: 13.5px; }
 """
 
@@ -1322,7 +1330,8 @@ def nacti_vstupy(text, soubory):
 
 
 def na_pozadi(prace):
-    """Spustí prace(log) ve vedlejším vlákně. Průběžně vrací (výpis, hotovo, výsledek)."""
+    """Spustí prace(log) ve vedlejším vlákně. Průběžně vrací
+    (celý výpis, hotovo, výsledek, krátký stav pro velký řádek nahoře)."""
     fronta = queue.Queue()
     vysledek = {}
 
@@ -1334,13 +1343,14 @@ def na_pozadi(prace):
         try:
             vysledek["ok"] = prace(log)
         except Exception as e:
+            vysledek["chyba"] = str(e)
             log(f"\n❌ CHYBA: {e}")
             log("\n(Technické detaily pro hledání chyby:)\n" + traceback.format_exc())
         finally:
             fronta.put(None)
 
     threading.Thread(target=vlakno, daemon=True).start()
-    radky, posledni_prepsatelny = [], False
+    radky, posledni_prepsatelny, stav = [], False, "⏳ Začínám…"
     while True:
         polozka = fronta.get()
         if polozka is None:
@@ -1351,8 +1361,53 @@ def na_pozadi(prace):
         else:
             radky.append(zprava)
         posledni_prepsatelny = druh == "prepsat"
-        yield "\n".join(radky[-400:]), False, None
-    yield "\n".join(radky[-400:]), True, vysledek.get("ok")
+        if "chyba" not in vysledek and zprava.strip() and not zprava.startswith("\n("):
+            stav = zprava.strip().splitlines()[0]
+            if zprava.startswith("   "):     # průběh (procenta) -> hezčí ikonka
+                stav = "⏳ " + stav
+        yield "\n".join(radky[-400:]), False, None, stav
+    if "chyba" in vysledek:
+        stav = f"❌ Chyba: {vysledek['chyba'].splitlines()[0]}"
+    yield "\n".join(radky[-400:]), True, vysledek.get("ok"), stav
+
+
+# ---- zapamatování nastavení mezi spuštěními ----
+SOUBOR_NASTAVENI = PROGRAM_DIR / "nastaveni.json"
+NAZVY_NASTAVENI = ["rezim", "claude_model", "api_klic", "jazyk_reci", "jazyk_textu", "titulky_dialogy",
+                   "rozlozeni", "kamera_pozice", "kamera_velikost", "nadpis", "priblizeni",
+                   "pocet", "min_d", "max_d", "whisper_model", "velka_pismena", "amd", "nazev_hry"]
+
+
+def nacti_ulozene():
+    try:
+        return json.loads(SOUBOR_NASTAVENI.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+
+
+def uloz_nastaveni(kontrola, hodnoty):
+    data = dict(zip(NAZVY_NASTAVENI, hodnoty))
+    data.pop("api_klic", None)                 # klíč se ukládá zvlášť do api_klic.txt
+    data["kontrola"] = bool(kontrola)
+    try:
+        SOUBOR_NASTAVENI.write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
+    except OSError:
+        pass
+
+
+def zvuk_hotovo():
+    """Krátké pípnutí, když je hotovo (ať nemusíš hlídat obrazovku)."""
+    if sys.platform.startswith("win"):
+        try:
+            import winsound
+            winsound.MessageBeep(winsound.MB_ICONASTERISK)
+        except Exception:
+            pass
+
+
+def stav_html(text):
+    return f'<div id="stav">{text}</div>'
+
 
 
 SLOUPCE_TABULKY = ["✔", "Začátek", "Konec", "Délka", "Nadpis ve videu", "Název", "Co se tam říká"]
@@ -1400,6 +1455,15 @@ def klip_z_radku(analyza, i, radek):
 def vytvor_okno():
     import gradio as gr
 
+    ul = nacti_ulozene()                       # naposledy použité nastavení
+
+    def u(nazev, vychozi, moznosti=None):
+        """Hodnota z uloženého nastavení (pokud je platná), jinak výchozí."""
+        h = ul.get(nazev, vychozi)
+        if moznosti is not None and h not in moznosti:
+            return vychozi
+        return h
+
     def ukaz_klic(r):
         return gr.Textbox(visible=str(r).startswith("Claude"))
 
@@ -1410,51 +1474,57 @@ def vytvor_okno():
         viditelne = ROZLOZENI.get(r) == "kamera"
         return gr.Dropdown(visible=viditelne), gr.Slider(visible=viditelne)
 
-    # ---------- tlačítko Spustit ----------
+    # ---------- velké tlačítko ----------
     def spustit(text, soubory, kontrola, *hodnoty):
+        uloz_nastaveni(kontrola, hodnoty)
         nast = sloz_nastaveni(*hodnoty)
         vstupy = nacti_vstupy(text, soubory)
         skryj = gr.Column(visible=False)
+        # výstupy: stav, výpis, soubory, panel kontroly, tabulka, analýza, složka
         if not vstupy:
-            yield ("❌ Vlož odkaz na YouTube, cestu k souboru, nebo nahraj MP4 soubor.",
-                   None, skryj, gr.skip(), None)
+            yield (stav_html("👆 Nejdřív vlož odkaz na YouTube nebo vyber video."),
+                   gr.skip(), gr.skip(), gr.skip(), gr.skip(), gr.skip(), gr.skip())
             return
 
         if kontrola and len(vstupy) == 1:
             prace = lambda log: analyzuj(vstupy[0], nast, log, nast["pocet"] + NAVRHU_NAVIC)
             prvni = True
-            for vypis, hotovo, vysl in na_pozadi(prace):
+            for vypis, hotovo, vysl, stav in na_pozadi(prace):
                 if not hotovo:
-                    yield vypis, None, (skryj if prvni else gr.skip()), gr.skip(), gr.skip()
+                    yield (stav_html(stav), vypis, None, skryj if prvni else gr.skip(),
+                           gr.skip(), gr.skip(), gr.skip())
                     prvni = False
                 elif vysl:
-                    vypis += ("\n\n👇 Hotovo! Níže zkontroluj návrhy: odškrtni, co nechceš, "
-                              "případně uprav čas, nadpis nebo název a klikni na „Vytvořit klipy“.")
-                    yield (vypis, None, gr.Column(visible=True),
-                           radky_tabulky(vysl, nast["pocet"]), vysl)
+                    zvuk_hotovo()
+                    yield (stav_html(f"👇 Našel jsem {tvar(len(vysl['klipy']), 'moment', 'momenty', 'momentů')} – zkontroluj je níže "
+                                     "a klikni na „Vytvořit zaškrtnuté klipy“."),
+                           vypis, None, gr.Column(visible=True), radky_tabulky(vysl, nast["pocet"]),
+                           vysl, gr.skip())
                 else:
-                    yield vypis, None, gr.skip(), gr.skip(), gr.skip()
+                    yield stav_html(stav), vypis, None, gr.skip(), gr.skip(), gr.skip(), gr.skip()
         else:
-            if kontrola and len(vstupy) > 1:
-                yield ("ℹ️ Víc videí najednou se zpracuje automaticky (bez kontroly návrhů).",
-                       None, skryj, gr.skip(), None)
-            for vypis, hotovo, vysl in na_pozadi(lambda log: zpracuj_vse(vstupy, nast, log)):
-                yield vypis, (vysl if hotovo else None), skryj, gr.skip(), gr.skip()
+            for vypis, hotovo, vysl, stav in na_pozadi(lambda log: zpracuj_vse(vstupy, nast, log)):
+                if hotovo and vysl:
+                    zvuk_hotovo()
+                    stav = f"🎉 Hotovo! Vytvořeno: {tvar(sum(1 for f in vysl if f.endswith('.mp4')), 'klip', 'klipy', 'klipů')}."
+                slozka = str(Path(vysl[0]).parent) if (hotovo and vysl) else gr.skip()
+                yield (stav_html(stav), vypis, (gr.File(value=vysl, visible=True) if (hotovo and vysl) else gr.skip()), skryj,
+                       gr.skip(), gr.skip(), slozka)
 
-    # ---------- tlačítko Vytvořit klipy (po kontrole) ----------
+    # ---------- vytvoření klipů po kontrole ----------
     def vytvorit_vybrane(analyza, tabulka, *hodnoty):
         nast = sloz_nastaveni(*hodnoty)
         if not analyza:
-            yield "❌ Nejdřív klikni na Spustit a počkej na návrhy.", None
+            yield stav_html("👆 Nejdřív klikni na „Najít nejlepší momenty“."), gr.skip(), None, gr.skip()
             return
         try:
             klipy = [klip_z_radku(analyza, i, r) for i, r in enumerate(radky_z_tabulky(tabulka))
                      if i < len(analyza["klipy"]) and je_zaskrtnuto(r[0])]
         except ValueError as e:
-            yield f"❌ {e}", None
+            yield stav_html(f"❌ {e}"), gr.skip(), None, gr.skip()
             return
         if not klipy:
-            yield "❌ Není zaškrtnutý žádný klip.", None
+            yield stav_html("❌ Není zaškrtnutý žádný klip."), gr.skip(), None, gr.skip()
             return
 
         def prace(log):
@@ -1462,17 +1532,21 @@ def vytvor_okno():
             otevri_slozku(slozka)
             return soubory
 
-        for vypis, hotovo, vysl in na_pozadi(prace):
-            yield vypis, (vysl if hotovo else None)
+        for vypis, hotovo, vysl, stav in na_pozadi(prace):
+            if hotovo and vysl:
+                zvuk_hotovo()
+                stav = f"🎉 Hotovo! Vytvořeno: {tvar(len(vysl) - 1, 'klip', 'klipy', 'klipů')}. Názvy a popisy jsou v popisky.txt."
+            slozka = str(Path(vysl[0]).parent) if (hotovo and vysl) else gr.skip()
+            yield stav_html(stav), vypis, (gr.File(value=vysl, visible=True) if (hotovo and vysl) else gr.skip()), slozka
 
     # ---------- náhled ----------
     def zapamatuj_radek(evt: gr.SelectData):
         radek = evt.index[0] if isinstance(evt.index, (list, tuple)) else evt.index
-        return radek, f"Vybraný řádek: **{radek + 1}**. Klikni na „Ukázat náhled“."
+        return radek, f"Vybraný řádek: **{radek + 1}** – klikni na „Ukázat náhled“."
 
     def nahled(analyza, tabulka, radek, *hodnoty):
         if not analyza:
-            raise gr.Error("Nejdřív klikni na Spustit a počkej na návrhy.")
+            raise gr.Error("Nejdřív najdi momenty.")
         radky = radky_z_tabulky(tabulka)
         radek = int(radek or 0)
         if radek >= len(radky) or radek >= len(analyza["klipy"]):
@@ -1498,116 +1572,124 @@ def vytvor_okno():
             raise gr.Error(f"Náhled se nepovedl: {e}")
         return str(cil)
 
+    def otevrit(slozka):
+        cil = Path(slozka) if slozka else VYSTUP_DIR
+        cil.mkdir(parents=True, exist_ok=True)
+        otevri_slozku(cil)
+        if not sys.platform.startswith("win"):
+            gr.Info(f"Klipy jsou ve složce: {cil}")
+
     with gr.Blocks(title="Shorts Maker") as okno:
         analyza = gr.State(None)
         vybrany_radek = gr.State(0)
+        posledni_slozka = gr.State("")
 
         gr.HTML("""
         <div id="hero">
-          <div class="logo">🎬</div>
-          <h1 style="background-image: linear-gradient(100deg, #8b5cf6 0%, #ec4899 55%, #f97316 100%); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; color: transparent;">Shorts Maker</h1>
-          <p>Z dlouhého streamu automaticky udělá krátká svislá videa s titulky
-             pro YouTube Shorts a TikTok.</p>
-          <div class="stitky">
-            <span class="stitek">🎙️ Čeština i angličtina</span>
-            <span class="stitek">🔥 Výběr nejlepších momentů</span>
-            <span class="stitek">🔍 Přiblížení v akci</span>
-            <span class="stitek">💬 TikTok titulky + nadpis</span>
-          </div>
+          <h1>🎬 <span style="background-image: linear-gradient(100deg, #8b5cf6 0%, #ec4899 55%, #f97316 100%); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; color: transparent;">Shorts Maker</span></h1>
+          <p>Vlož video a klikni na tlačítko. Zbytek udělám já.</p>
         </div>""")
 
-        with gr.Row(equal_height=True):
-            # --- Karta 1: video ---
-            with gr.Column(elem_classes="karta"):
-                gr.HTML('<div class="nadpis-karty"><span>1</span>Video</div>'
-                        '<div class="napoveda">Vlož odkaz na YouTube nebo cestu k souboru '
-                        '(pravé tlačítko na video → „Kopírovat jako cestu“). '
-                        'Víc videí najednou = každé na nový řádek.</div>')
-                vstup_text = gr.Textbox(show_label=False, container=False, lines=2, max_lines=8,
-                                        placeholder="https://www.youtube.com/watch?v=…\nC:\\Videa\\stream.mp4")
-                nahrane = gr.File(label="…nebo přetáhni MP4 soubory sem", file_types=["video"],
-                                  type="filepath", file_count="multiple", height=110)
-                kontrola = gr.Checkbox(value=True, label="Před vytvořením mi ukaž návrhy ke kontrole "
-                                                          "(jen u jednoho videa)")
-
-            # --- Karta 2: jazyk a výběr ---
-            with gr.Column(elem_classes="karta"):
-                gr.HTML('<div class="nadpis-karty"><span>2</span>Jazyk a výběr momentů</div>')
-                jazyk_reci = gr.Dropdown(list(JAZYKY_RECI), value="Čeština", label="Jazyk řeči ve videu")
-                titulky_dialogy = gr.Checkbox(value=True, visible=False,
-                                              label="Dávat titulky i anglickým dialogům postav (modře)")
-                jazyk_textu = gr.Radio(list(JAZYKY_TEXTU), value="Čeština",
-                                       label="Jazyk názvů, popisů a nadpisu (překlad umí jen Claude AI)")
-                rezim = gr.Radio(["Zdarma (bez AI)", "Claude AI (placené)"],
-                                 value="Zdarma (bez AI)", label="Výběr momentů")
-                api_klic = gr.Textbox(label="Claude API klíč (stačí jednou, program si ho zapamatuje)",
-                                      type="password", placeholder="sk-ant-…", visible=False)
-
-        # --- Karta 3: vzhled klipu ---
+        # ===== HLAVNÍ ČÁST: jen vložit video a kliknout =====
         with gr.Column(elem_classes="karta"):
-            gr.HTML('<div class="nadpis-karty"><span>3</span>Vzhled klipu</div>')
-            with gr.Row():
-                with gr.Column():
-                    rozlozeni = gr.Radio(list(ROZLOZENI), value="Oříznout na střed",
-                                         label="Převod na svislé video")
-                    kamera_pozice = gr.Dropdown(POZICE_KAMERY, value=POZICE_KAMERY[0], visible=False,
-                                                label="Kde je ve videu tvoje kamera")
-                    kamera_velikost = gr.Slider(10, 50, value=25, step=1, visible=False,
-                                                label="Velikost kamery (% šířky obrazu) – ověř v náhledu")
-                with gr.Column():
-                    nadpis = gr.Checkbox(value=True, label="Velký nadpis v prvních 3 sekundách")
-                    priblizeni = gr.Checkbox(value=True, label="Přiblížení obrazu v akčních momentech")
-                    velka_pismena = gr.Checkbox(value=True, label="Titulky VELKÝMI PÍSMENY")
+            gr.HTML('<div class="nadpis-karty"><span>1</span>Vlož video</div>'
+                    '<div class="napoveda">Odkaz na YouTube, nebo přetáhni MP4 soubor do pole pod tím. '
+                    '(Víc videí najednou = každý odkaz na nový řádek.)</div>')
+            vstup_text = gr.Textbox(show_label=False, container=False, lines=1, max_lines=8,
+                                    placeholder="Sem vlož odkaz, např. https://www.youtube.com/watch?v=…",
+                                    elem_id="vstup")
+            nahrane = gr.File(label="…nebo sem přetáhni video ze složky", file_types=["video"],
+                              type="filepath", file_count="multiple", height=140)
 
-        # --- Pokročilé volby: není potřeba na ně sahat ---
-        with gr.Accordion("⚙️  Pokročilé nastavení (není potřeba měnit)", open=False,
-                          elem_classes="karta-pokrocile"):
-            with gr.Row():
-                with gr.Column():
-                    pocet = gr.Slider(5, 15, value=8, step=1, label="Počet klipů")
-                    min_d = gr.Slider(15, 60, value=20, step=1, label="Minimální délka klipu (s)")
-                    max_d = gr.Slider(20, 90, value=60, step=1, label="Maximální délka klipu (s)")
-                    nazev_hry = gr.Textbox(label="Název hry (pro hashtagy, nepovinné)",
-                                           placeholder="např. GTA 6")
-                with gr.Column():
-                    whisper_model = gr.Dropdown(
-                        [("small – rychlý, dobrý (doporučeno)", "small"),
-                         ("large-v3-turbo – přesnější, asi 2× pomalejší", "large-v3-turbo"),
-                         ("medium – přesnější, nejpomalejší", "medium")],
-                        value="small", label="Přesnost přepisu řeči")
-                    claude_model = gr.Dropdown([(m[0], m[1]) for m in CLAUDE_MODELY],
-                                               value=CLAUDE_MODELY[0][1], label="Model Claude")
-                    amd = gr.Checkbox(value=True, label="Kódovat video grafikou AMD (rychlejší; "
-                                                         "když nejde, použije se procesor)")
+        tlacitko = gr.Button("🚀  Najít nejlepší momenty", variant="primary", elem_id="spustit")
+        stav = gr.HTML(stav_html("Připraveno. Vlož video a klikni na tlačítko výše."))
 
-        tlacitko = gr.Button("🚀  Spustit", variant="primary", elem_id="spustit")
-
-        # --- Karta 4: kontrola návrhů (ukáže se po analýze) ---
+        # ===== KONTROLA NÁVRHŮ (ukáže se po analýze) =====
         with gr.Column(elem_classes="karta", visible=False) as panel_kontroly:
-            gr.HTML('<div class="nadpis-karty"><span>4</span>Kontrola návrhů</div>'
-                    '<div class="napoveda">Odškrtni klipy, které nechceš. Čas, nadpis i název můžeš '
-                    'přepsat (dvojklik do buňky). Pro náhled klikni do řádku a pak na „Ukázat náhled“.</div>')
+            gr.HTML('<div class="nadpis-karty"><span>2</span>Vyber klipy</div>'
+                    '<div class="napoveda">Odškrtni, co nechceš. Pro náhled klikni do řádku a na '
+                    '„Ukázat náhled“. Čas, nadpis i název můžeš přepsat dvojklikem.</div>')
             tabulka = gr.Dataframe(headers=SLOUPCE_TABULKY,
                                    datatype=["bool", "str", "str", "str", "str", "str", "str"],
-                                   type="array", interactive=True, wrap=True, static_columns=[3, 6], elem_id="tabulka",
+                                   type="array", interactive=True, wrap=True, static_columns=[3, 6],
+                                   elem_id="tabulka",
                                    column_widths=["6%", "10%", "10%", "8%", "20%", "22%", "24%"])
             with gr.Row():
                 with gr.Column(scale=1):
-                    info_radek = gr.Markdown("Klikni do řádku v tabulce a pak na „Ukázat náhled“.")
-                    tlacitko_nahled = gr.Button("👁️  Ukázat náhled")
                     tlacitko_vytvorit = gr.Button("🎬  Vytvořit zaškrtnuté klipy", variant="primary",
                                                   elem_id="vytvorit")
+                    info_radek = gr.Markdown("Klikni do řádku v tabulce a pak na „Ukázat náhled“.")
+                    tlacitko_nahled = gr.Button("👁️  Ukázat náhled")
                 with gr.Column(scale=1):
                     video_nahled = gr.Video(label="Náhled", height=480, autoplay=True)
 
-        # --- Karta 5: průběh ---
-        with gr.Column(elem_classes="karta"):
-            gr.HTML('<div class="nadpis-karty"><span>✓</span>Průběh a výsledky</div>')
+        # ===== VÝSLEDKY =====
+        with gr.Row():
+            soubory = gr.File(label="Hotové klipy", file_count="multiple", height=170, scale=3, visible=False)
+            tlacitko_slozka = gr.Button("📂  Otevřít složku s klipy", scale=1)
+        with gr.Accordion("📋 Podrobný výpis (pro hledání chyb)", open=False):
             vypis = gr.Textbox(show_label=False, lines=12, max_lines=30, autoscroll=True,
                                elem_id="vypis", placeholder="Tady uvidíš, co program právě dělá…")
-            soubory = gr.File(label="Hotové klipy (ke stažení)", file_count="multiple", height=120)
 
-        # Pořadí musí odpovídat parametrům funkce sloz_nastaveni()
+        # ===== NASTAVENÍ (schované, pamatuje si se) =====
+        with gr.Accordion("⚙️  Nastavení – není potřeba měnit, program si ho pamatuje", open=False,
+                          elem_classes="karta-pokrocile"):
+            with gr.Row():
+                with gr.Column():
+                    gr.Markdown("**🗣️ Jazyk**")
+                    jazyk_reci = gr.Dropdown(list(JAZYKY_RECI), label="Jazyk řeči ve videu",
+                                             value=u("jazyk_reci", "Čeština", list(JAZYKY_RECI)))
+                    titulky_dialogy = gr.Checkbox(value=u("titulky_dialogy", True),
+                                                  visible=JAZYKY_RECI.get(u("jazyk_reci", "Čeština")) == "mix",
+                                                  label="Titulky i pro anglické dialogy postav (modře)")
+                    jazyk_textu = gr.Radio(list(JAZYKY_TEXTU), label="Jazyk názvů a nadpisu "
+                                                                     "(překlad umí jen Claude AI)",
+                                           value=u("jazyk_textu", "Čeština", list(JAZYKY_TEXTU)))
+                    gr.Markdown("**🔥 Výběr momentů**")
+                    rezim = gr.Radio(["Zdarma (bez AI)", "Claude AI (placené)"], show_label=False,
+                                     value=u("rezim", "Zdarma (bez AI)",
+                                             ["Zdarma (bez AI)", "Claude AI (placené)"]))
+                    api_klic = gr.Textbox(label="Claude API klíč (stačí jednou)", type="password",
+                                          placeholder="sk-ant-…",
+                                          visible=str(u("rezim", "")).startswith("Claude"))
+                    kontrola = gr.Checkbox(value=u("kontrola", True),
+                                           label="Před vytvořením ukázat návrhy ke kontrole")
+                with gr.Column():
+                    gr.Markdown("**🎨 Vzhled klipu**")
+                    rozlozeni = gr.Radio(list(ROZLOZENI), label="Převod na svislé video",
+                                         value=u("rozlozeni", "Oříznout na střed", list(ROZLOZENI)))
+                    je_kamera = ROZLOZENI.get(u("rozlozeni", "")) == "kamera"
+                    kamera_pozice = gr.Dropdown(POZICE_KAMERY, visible=je_kamera,
+                                                label="Kde je ve videu tvoje kamera",
+                                                value=u("kamera_pozice", POZICE_KAMERY[0], POZICE_KAMERY))
+                    kamera_velikost = gr.Slider(10, 50, step=1, visible=je_kamera,
+                                                value=u("kamera_velikost", 25),
+                                                label="Velikost kamery (% šířky) – ověř v náhledu")
+                    nadpis = gr.Checkbox(value=u("nadpis", True), label="Velký nadpis v prvních 3 sekundách")
+                    priblizeni = gr.Checkbox(value=u("priblizeni", True),
+                                             label="Přiblížení obrazu v akčních momentech")
+                    velka_pismena = gr.Checkbox(value=u("velka_pismena", True), label="Titulky VELKÝMI PÍSMENY")
+            with gr.Accordion("🔧 Pro pokročilé", open=False):
+                with gr.Row():
+                    with gr.Column():
+                        pocet = gr.Slider(5, 15, value=u("pocet", 8), step=1, label="Počet klipů")
+                        min_d = gr.Slider(15, 60, value=u("min_d", 20), step=1, label="Minimální délka klipu (s)")
+                        max_d = gr.Slider(20, 90, value=u("max_d", 60), step=1, label="Maximální délka klipu (s)")
+                        nazev_hry = gr.Textbox(label="Název hry (pro hashtagy)", value=u("nazev_hry", ""),
+                                               placeholder="např. GTA 6")
+                    with gr.Column():
+                        modely_prepisu = [("small – rychlý, dobrý (doporučeno)", "small"),
+                                          ("large-v3-turbo – přesnější, asi 2× pomalejší", "large-v3-turbo"),
+                                          ("medium – přesnější, nejpomalejší", "medium")]
+                        whisper_model = gr.Dropdown(modely_prepisu, label="Přesnost přepisu řeči",
+                                                    value=u("whisper_model", "small",
+                                                            [m[1] for m in modely_prepisu]))
+                        claude_model = gr.Dropdown([(m[0], m[1]) for m in CLAUDE_MODELY], label="Model Claude",
+                                                   value=u("claude_model", CLAUDE_MODELY[0][1],
+                                                           [m[1] for m in CLAUDE_MODELY]))
+                        amd = gr.Checkbox(value=u("amd", True), label="Kódovat video grafikou AMD (rychlejší)")
+
+        # Pořadí musí odpovídat parametrům funkce sloz_nastaveni() a NAZVY_NASTAVENI
         nastaveni = [rezim, claude_model, api_klic, jazyk_reci, jazyk_textu, titulky_dialogy,
                      rozlozeni, kamera_pozice, kamera_velikost, nadpis, priblizeni,
                      pocet, min_d, max_d, whisper_model, velka_pismena, amd, nazev_hry]
@@ -1617,11 +1699,14 @@ def vytvor_okno():
         rozlozeni.change(ukaz_kameru, rozlozeni, [kamera_pozice, kamera_velikost])
 
         tlacitko.click(spustit, [vstup_text, nahrane, kontrola] + nastaveni,
-                       [vypis, soubory, panel_kontroly, tabulka, analyza])
+                       [stav, vypis, soubory, panel_kontroly, tabulka, analyza, posledni_slozka])
         tabulka.select(zapamatuj_radek, None, [vybrany_radek, info_radek])
         tlacitko_nahled.click(nahled, [analyza, tabulka, vybrany_radek] + nastaveni, video_nahled)
-        tlacitko_vytvorit.click(vytvorit_vybrane, [analyza, tabulka] + nastaveni, [vypis, soubory])
+        tlacitko_vytvorit.click(vytvorit_vybrane, [analyza, tabulka] + nastaveni,
+                                [stav, vypis, soubory, posledni_slozka])
+        tlacitko_slozka.click(otevrit, posledni_slozka, None)
     return okno
+
 
 
 def vzhled():

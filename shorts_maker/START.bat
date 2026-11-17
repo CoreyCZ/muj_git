@@ -63,9 +63,12 @@ echo [4/4] Kontroluji aktualizaci stahovace YouTube ...
 "venv\Scripts\python.exe" -m pip install -U -q "yt-dlp[default]" >nul 2>nul
 
 :spustit
+rem Zastupce na plose, at priste nemusis hledat slozku
+powershell -NoProfile -Command "$w=New-Object -ComObject WScript.Shell; $s=$w.CreateShortcut([Environment]::GetFolderPath('Desktop')+'\Shorts Maker.lnk'); $s.TargetPath='%~dp0START.bat'; $s.WorkingDirectory='%~dp0'; $s.Save()" >nul 2>nul
 echo.
 echo ============================================================
 echo    Vse pripraveno. Program se otevre v prohlizeci.
+echo    Priste staci kliknout na ikonu "Shorts Maker" na plose.
 echo    Tohle cerne okno NEZAVIREJ, dokud program pouzivas.
 echo ============================================================
 "venv\Scripts\python.exe" shorts_maker.py

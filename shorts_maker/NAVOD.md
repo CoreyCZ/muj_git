@@ -21,37 +21,38 @@ Stažený ZIP otevři, klikni na **Extrahovat vše** a rozbal ho třeba na ploch
 * Když se zeptá, jestli povolit změny, klikni na **Ano**.
 * Při prvním spuštění se samo nainstaluje vše potřebné (Python, FFmpeg a knihovny). Trvá to 10–20 minut.
   Potom se v prohlížeči otevře stránka programu.
-* Příště už jen dvakrát klikneš na `START.bat` a program se otevře za pár vteřin.
+* Na ploše se ti vytvoří ikona **Shorts Maker**. Příště už jen dvakrát klikneš na ni.
 
 Černé okno, které se otevře, **nezavírej**, dokud program používáš.
 
 ## 2. Použití
 
-1. **Video:** vlož odkaz na YouTube nebo cestu k souboru. Cestu zkopíruješ tak, že na video
-   klikneš pravým tlačítkem a vybereš **Kopírovat jako cestu**.
-   Víc videí najednou: každé dej na nový řádek. Zpracují se automaticky jedno po druhém,
-   třeba přes noc.
-2. **Jazyk:**
-   * *Jazyk řeči ve videu*: **Čeština**, **Angličtina**, nebo **Čeština + angličtina**
-     (ty mluvíš česky a postavy ve hře anglicky). U mixu můžeš zvolit, jestli mají mít
-     titulky i anglické dialogy. Ty se pak zobrazí světle modře.
-   * *Jazyk názvů, popisů a nadpisu*: **Čeština** nebo **English**. Přeložit do jiného jazyka
-     než ve videu umí jen režim Claude AI.
-3. **Vzhled klipu:**
-   * **Oříznout na střed**, **Rozostřené pozadí** (vidět je celý obraz hry), nebo
-     **Kamera nahoře + hra dole**. U kamery zvol, ve kterém rohu videa je, a podle náhledu
-     dolaď její velikost.
-   * **Velký nadpis** v prvních 3 sekundách, aby divák neodscrolloval.
-   * **Přiblížení** obrazu v nejhlasitějších momentech (výbuchy, výkřiky).
-4. Klikni na **🚀 Spustit**.
-5. **Kontrola návrhů:** zobrazí se tabulka s návrhy (o pár víc, než kolik chceš klipů).
-   * Odškrtni klipy, které nechceš.
-   * Dvojklikem do buňky můžeš přepsat začátek, konec, nadpis nebo název.
-   * Klikni do řádku a pak na **👁️ Ukázat náhled**, uvidíš, jak bude klip vypadat.
-   * Nakonec klikni na **🎬 Vytvořit zaškrtnuté klipy**.
-6. Otevře se složka s hotovými klipy a souborem `popisky.txt` (názvy, popisy, hashtagy).
+Po prvním spuštění máš na ploše ikonu **Shorts Maker**. Na ni stačí dvakrát kliknout.
 
-Kontrolu návrhů můžeš vypnout zaškrtávátkem v kartě „Video“. Klipy se pak vytvoří rovnou.
+1. **Vlož video.** Vlož odkaz na YouTube, nebo přetáhni MP4 soubor do pole.
+2. Klikni na **🚀 Najít nejlepší momenty**. Velký řádek pod tlačítkem ukazuje, co se právě děje.
+   Až bude hotovo, počítač pípne.
+3. **Vyber klipy.** Odškrtni ty, které nechceš.
+   * Pro náhled klikni do řádku a pak na **👁️ Ukázat náhled**.
+   * Dvojklikem do buňky můžeš přepsat čas, nadpis nebo název.
+4. Klikni na **🎬 Vytvořit zaškrtnuté klipy**. Sama se otevře složka s hotovými videi
+   a souborem `popisky.txt`, kde jsou názvy, popisy a hashtagy.
+
+Kdykoli se ke klipům dostaneš tlačítkem **📂 Otevřít složku s klipy**.
+
+### Nastavení (jen jednou, program si ho pamatuje)
+
+Rozklikni **⚙️ Nastavení**. Tady najdeš:
+* **Jazyk řeči ve videu:** čeština, angličtina, nebo čeština + angličtina (ty mluvíš česky
+  a postavy ve hře anglicky; jejich dialogy pak můžou mít titulky modře).
+* **Jazyk názvů a nadpisu:** čeština nebo English (přeložit umí jen Claude AI).
+* **Výběr momentů:** zdarma, nebo Claude AI.
+* **Vzhled:** ořez na střed, rozostřené pozadí, nebo kamera nahoře + hra dole.
+  K tomu velký nadpis na začátku, přiblížení v akci a velká písmena v titulcích.
+* Úplně dole je sekce **Pro pokročilé** (počet a délka klipů, přesnost přepisu…).
+
+Víc videí najednou: v poli „Vlož video“ dej každý odkaz na nový řádek. Videa se zpracují
+automaticky jedno po druhém, třeba přes noc.
 
 ### Tipy pro GTA a jiné hry
 
