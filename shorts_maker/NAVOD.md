@@ -9,51 +9,30 @@ použije na rychlejší kódování hotových videí.
 
 ---
 
-## 1. Instalace (jen jednou)
+## 1. Instalace a spuštění: jen 2 kroky
 
-Otevři **Příkazový řádek**: stiskni klávesu Windows, napiš `cmd` a stiskni Enter.
-Do okna postupně vlož tyto příkazy. Každý potvrď Enterem a počkej, až doběhne.
+**Krok 1: Stáhni program.** Otevři tento odkaz (musíš být přihlášený na GitHubu):
+https://github.com/CoreyCZ/muj_git/archive/refs/heads/claude/intelligent-ptolemy-xtvpag.zip
 
-```
-winget install --id Python.Python.3.12 -e
-winget install --id Gyan.FFmpeg -e
-winget install --id DenoLand.Deno -e
-```
+Stažený ZIP otevři, klikni na **Extrahovat vše** a rozbal ho třeba na plochu.
 
-* **Python 3.12**: programovací jazyk, ve kterém je program napsaný.
-* **FFmpeg**: stříhá a převádí video.
-* **Deno**: bez něj už nástroj yt-dlp neumí stahovat z YouTube.
+**Krok 2: Dvakrát klikni na `START.bat`.** Najdeš ho v rozbalené složce v podsložce `shorts_maker`.
+* Když Windows napíše „Systém Windows ochránil váš počítač“, klikni na **Další informace → Přesto spustit**.
+* Když se zeptá, jestli povolit změny, klikni na **Ano**.
+* Při prvním spuštění se samo nainstaluje vše potřebné (Python, FFmpeg a knihovny). Trvá to 10–20 minut.
+  Potom se v prohlížeči otevře stránka programu.
+* Příště už jen dvakrát klikneš na `START.bat` a program se otevře za pár vteřin.
 
-Potom **zavři příkazový řádek a otevři ho znovu**, aby Windows nové programy našel. Pro kontrolu:
+Černé okno, které se otevře, **nezavírej**, dokud program používáš.
 
-```
-py -3.12 --version
-ffmpeg -version
-```
+## 2. Použití
 
-Oba příkazy musí vypsat číslo verze, nesmí napsat „není rozpoznán“.
+1. Do horního pole vlož **odkaz na YouTube** nebo **cestu k souboru**. Cestu zkopíruješ tak,
+   že na video klikneš pravým tlačítkem a vybereš **Kopírovat jako cestu**.
+2. Vyber **Zdarma** nebo **Claude AI**.
+3. Klikni na **🚀 Spustit**. Na konci se sama otevře složka s hotovými klipy a souborem `popisky.txt`.
 
-### Stažení programu
-
-Na GitHubu otevři repozitář, klikni na **Code → Download ZIP** a rozbal ho třeba do `C:\ShortsMaker`.
-Ve složce `shorts_maker` musí být soubory `shorts_maker.py`, `instalace.bat`, `spustit.bat` a `requirements.txt`.
-
-### Instalace knihoven
-
-Dvakrát klikni na **`instalace.bat`**. Instalace trvá několik minut a stáhne asi 1 GB.
-Až se objeví „Hotovo“, stiskni libovolnou klávesu.
-
----
-
-## 2. Spuštění
-
-1. Dvakrát klikni na **`spustit.bat`**. Otevře se černé okno (to **nezavírej**) a v prohlížeči stránka programu.
-   Kdyby se stránka neotevřela, zadej do prohlížeče adresu `http://127.0.0.1:7860`.
-2. Do horního pole vlož **odkaz na YouTube** nebo **cestu k souboru**, např. `C:\Videa\stream.mp4`.
-   Cestu zkopíruješ tak, že na soubor klikneš pravým tlačítkem a vybereš „Kopírovat jako cestu“.
-   U velkých souborů je vložení cesty mnohem rychlejší než přetažení souboru do okna.
-3. Nastav počet klipů, jejich délku a vzhled. Pak klikni na **🚀 Spustit**.
-4. Ve spodním poli uvidíš průběh. Na konci se otevře složka `vystup\...` s hotovými klipy a souborem `popisky.txt`.
+Ostatní volby jsou schované v sekci **Pokročilé nastavení** a nemusíš je měnit.
 
 ### Jak dlouho to trvá (3hodinový stream, běžný 6–8jádrový procesor)
 
@@ -101,17 +80,17 @@ Přesnou cenu každého spuštění vypíše program do průběhu.
 
 | Hláška | Co udělat |
 |---|---|
-| `'py' není rozpoznán…` | Python není nainstalovaný. Spusť znovu `winget install --id Python.Python.3.12 -e` a otevři nový příkazový řádek. |
-| `Nenašel jsem program ffmpeg` | `winget install --id Gyan.FFmpeg -e`, pak zavři a znovu spusť `spustit.bat`. Když to nepomůže, restartuj počítač. |
-| Chyba při stahování z YouTube (`Sign in to confirm`, `HTTP Error 403`, `n challenge`) | Spusť znovu `instalace.bat` (aktualizuje yt-dlp) a ověř, že je nainstalované Deno. Jde o tvoje video? Pak si ho můžeš stáhnout v YouTube Studiu (Obsah → ⋮ → Stáhnout) a vložit cestu k souboru. |
-| `Could not load library…`, `DLL load failed` | Nainstaluj „Microsoft Visual C++ Redistributable“: `winget install --id Microsoft.VCRedist.2015+.x64 -e` |
+| `START.bat` hlásí chybu při instalaci | Restartuj počítač a spusť `START.bat` znovu. Pokračuje tam, kde skončil. |
+| `Nenašel jsem program ffmpeg` | Restartuj počítač a spusť `START.bat` znovu. |
+| Chyba při stahování z YouTube (`Sign in to confirm`, `HTTP Error 403`, `n challenge`) | Zavři program a spusť `START.bat` znovu, sám aktualizuje stahovač. Jde o tvoje video? Pak si ho můžeš stáhnout v YouTube Studiu (Obsah → ⋮ → Stáhnout) a vložit cestu k souboru. |
+| `Could not load library…`, `DLL load failed` | Restartuj počítač a spusť `START.bat` znovu (doinstaluje chybějící součásti Windows). |
 | Přepis je moc pomalý | Zvol model `small`. Pak už jen nech program běžet, přepis se dělá jen jednou. |
 | `MemoryError` / počítač se zasekne | Zavři ostatní programy (hlavně hry a prohlížeč s mnoha panely), použij model `small`. |
 | `Kódování přes AMD grafiku nejde` | Nic se neděje, program automaticky použije procesor. Můžeš odškrtnout volbu AMD. |
 | `API klíč je neplatný` | Zkontroluj klíč na console.anthropic.com, nebo smaž `api_klic.txt` a vlož klíč znovu. |
 | `Výběr přes Claude se nepovedl` | Program sám pokračuje variantou zdarma. Nejčastější příčiny jsou chybějící kredit nebo internet. |
 | Titulky jsou posunuté nebo jinak chybné | Zvol přesnější model přepisu (`large-v3-turbo`). |
-| Stránka se neotevře / port je obsazený | Zavři všechna černá okna programu a spusť `spustit.bat` znovu. |
+| Stránka se neotevře / port je obsazený | Zavři všechna černá okna programu a spusť `START.bat` znovu. |
 
 Při každé chybě vypíše program dole v okně **technické detaily**. Když si nebudeš vědět rady,
 zkopíruj celý text z pole „Průběh“ a pošli mi ho.

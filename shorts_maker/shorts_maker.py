@@ -980,37 +980,40 @@ def vytvor_okno():
     with gr.Blocks(title="Shorts Maker") as okno:
         gr.Markdown("# 🎬 Shorts Maker\nZ dlouhého streamu udělá krátká svislá videa s titulky "
                     "pro YouTube Shorts a TikTok.")
-        with gr.Row():
-            with gr.Column():
-                vstup_text = gr.Textbox(
-                    label="Odkaz na YouTube video NEBO cesta k MP4 souboru na disku",
-                    placeholder="https://www.youtube.com/watch?v=…   nebo   C:\\Videa\\stream.mp4")
-                nahrany = gr.File(label="…nebo sem přetáhni MP4 soubor (u velkých souborů je "
-                                        "rychlejší vložit cestu výše)",
-                                  file_types=["video"], type="filepath")
-                nazev_hry = gr.Textbox(label="Název hry (pro hashtagy, nepovinné)",
-                                       placeholder="např. GTA V")
-                rezim = gr.Radio(["Zdarma (bez AI)", "Claude AI (placené, chytřejší výběr a názvy)"],
-                                 value="Zdarma (bez AI)", label="Způsob výběru momentů")
-                claude_model = gr.Dropdown([(m[0], m[1]) for m in CLAUDE_MODELY],
-                                           value=CLAUDE_MODELY[0][1], label="Model Claude")
-                api_klic = gr.Textbox(label="Claude API klíč (stačí jednou – uloží se do api_klic.txt)",
-                                      type="password", placeholder="sk-ant-…")
-            with gr.Column():
-                pocet = gr.Slider(5, 15, value=8, step=1, label="Počet klipů")
-                min_d = gr.Slider(15, 60, value=20, step=1, label="Minimální délka klipu (s)")
-                max_d = gr.Slider(20, 90, value=60, step=1, label="Maximální délka klipu (s)")
-                whisper_model = gr.Dropdown(
-                    [("small – rychlý, dobrý (doporučeno)", "small"),
-                     ("large-v3-turbo – přesnější, asi 2× pomalejší", "large-v3-turbo"),
-                     ("medium – přesnější, nejpomalejší", "medium")],
-                    value="small", label="Přesnost přepisu řeči")
-                format_videa = gr.Radio(["Oříznout na střed", "Rozostřené pozadí (celý obraz hry)"],
-                                        value="Oříznout na střed", label="Převod na svislé video")
-                velka_pismena = gr.Checkbox(value=True, label="Titulky VELKÝMI PÍSMENY")
-                pouzit_amd = gr.Checkbox(value=True, label="Kódovat video grafikou AMD (rychlejší; "
-                                                            "když nejde, použije se procesor)")
-        tlacitko = gr.Button("🚀 Spustit", variant="primary", size="lg")
+        # --- To hlavní: co zpracovat a jak vybírat ---
+        vstup_text = gr.Textbox(
+            label="1) Vlož odkaz na YouTube video NEBO cestu k MP4 souboru",
+            placeholder="https://www.youtube.com/watch?v=…   nebo   C:\\Videa\\stream.mp4")
+        nahrany = gr.File(label="…nebo sem přetáhni MP4 soubor", file_types=["video"], type="filepath")
+        rezim = gr.Radio(["Zdarma (bez AI)", "Claude AI (placené, chytřejší výběr a názvy)"],
+                         value="Zdarma (bez AI)", label="2) Jak vybírat nejlepší momenty")
+        api_klic = gr.Textbox(label="Claude API klíč – jen pokud jsi vybral Claude AI "
+                                    "(stačí jednou, program si ho zapamatuje)",
+                              type="password", placeholder="sk-ant-…")
+
+        # --- Pokročilé volby: není potřeba na ně sahat ---
+        with gr.Accordion("⚙️ Pokročilé nastavení (není potřeba měnit)", open=False):
+            with gr.Row():
+                with gr.Column():
+                    pocet = gr.Slider(5, 15, value=8, step=1, label="Počet klipů")
+                    min_d = gr.Slider(15, 60, value=20, step=1, label="Minimální délka klipu (s)")
+                    max_d = gr.Slider(20, 90, value=60, step=1, label="Maximální délka klipu (s)")
+                    nazev_hry = gr.Textbox(label="Název hry (pro hashtagy, nepovinné)",
+                                           placeholder="např. GTA V")
+                    claude_model = gr.Dropdown([(m[0], m[1]) for m in CLAUDE_MODELY],
+                                               value=CLAUDE_MODELY[0][1], label="Model Claude")
+                with gr.Column():
+                    whisper_model = gr.Dropdown(
+                        [("small – rychlý, dobrý (doporučeno)", "small"),
+                         ("large-v3-turbo – přesnější, asi 2× pomalejší", "large-v3-turbo"),
+                         ("medium – přesnější, nejpomalejší", "medium")],
+                        value="small", label="Přesnost přepisu řeči")
+                    format_videa = gr.Radio(["Oříznout na střed", "Rozostřené pozadí (celý obraz hry)"],
+                                            value="Oříznout na střed", label="Převod na svislé video")
+                    velka_pismena = gr.Checkbox(value=True, label="Titulky VELKÝMI PÍSMENY")
+                    pouzit_amd = gr.Checkbox(value=True, label="Kódovat video grafikou AMD (rychlejší; "
+                                                                "když nejde, použije se procesor)")
+        tlacitko = gr.Button("3) 🚀 Spustit", variant="primary", size="lg")
         vypis = gr.Textbox(label="Průběh", lines=18, max_lines=30, autoscroll=True)
         soubory = gr.File(label="Hotové klipy (ke stažení)", file_count="multiple")
 
