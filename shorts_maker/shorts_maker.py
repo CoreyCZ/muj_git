@@ -450,6 +450,13 @@ def je_anglicky(text):
     return en > cs
 
 
+def nacti_wav(wav):
+    """Načte WAV (16 kHz, mono, 16 bit) do pole čísel pro Whisper."""
+    with wave.open(str(wav), "rb") as w:
+        data = w.readframes(w.getnframes())
+    return np.frombuffer(data, dtype=np.int16).astype(np.float32) / 32768.0
+
+
 def prepis_rec(wav, slozka, model_nazev, jazyk, log):
     """Přepíše řeč na text. Vrací seznam slov:
     [{"s": začátek, "e": konec, "w": "slovo", "l": "cs"/"en"}, …].
@@ -479,15 +486,19 @@ def prepis_rec(wav, slozka, model_nazev, jazyk, log):
     else:
         nastaveni.update(language=jazyk)
 
+    # Zvuk načteme sami (WAV 16 kHz mono) – nespoléháme na knihovnu "av",
+    # jejíž novější verze nejsou s faster-whisper kompatibilní.
+    zvuk = nacti_wav(wav)
+
     log("📝 Přepisuji řeč na text… (na procesoru to u 3h streamu trvá zhruba 30–90 minut "
         "podle zvoleného modelu – nech okno otevřené)")
     start = time.time()
     try:
         # Dávkové zpracování je na vícejádrovém procesoru rychlejší.
         davkovy = BatchedInferencePipeline(model=model)
-        segmenty, info = davkovy.transcribe(str(wav), batch_size=8, **nastaveni)
+        segmenty, info = davkovy.transcribe(zvuk, batch_size=8, **nastaveni)
     except Exception:
-        segmenty, info = model.transcribe(str(wav), **nastaveni)
+        segmenty, info = model.transcribe(zvuk, **nastaveni)
 
     celkem = info.duration or 1
     slova = []
